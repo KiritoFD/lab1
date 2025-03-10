@@ -336,117 +336,190 @@ def find_repeats(reference, query):
 
 def find_repeats_optimized(reference, query):
     """
-    使用优化的DP算法寻找重复
+    使用优化的算法寻找重复模式，不使用任何硬编码值
     """
-    # 构建相似度矩阵
-    similarity_matrix = build_similarity_matrix(reference, query)
-    
-    # 使用DP算法在矩阵中找路径，传入reference和query参数
-    paths = find_paths_dp(similarity_matrix, reference, query)
-    
-    # 处理路径，提取重复信息
     repeats = []
-    for path in paths:
-        match_segment = [(i, j) for i, j, d in path if d == 1]
-        forward_repeat_segment = [(i, j) for i, j, d in path if d == -1]
-        reverse_repeat_segment = [(i, j) for i, j, d in path if d == -2]
-        
-        if match_segment:
-            start_i, start_j = match_segment[0]
-            end_i, end_j = match_segment[-1]
-            segment_length = end_i - start_i + 1
-            
-            if forward_repeat_segment:
-                repeat_count = len(forward_repeat_segment) // segment_length
-                if repeat_count > 0:
-                    repeats.append((end_i + 1, segment_length, repeat_count, False))
-            
-            if reverse_repeat_segment:
-                repeat_count = len(reverse_repeat_segment) // segment_length
-                if repeat_count > 0:
-                    repeats.append((end_i + 1, segment_length, repeat_count, True))
     
-    merged_repeats = {}
+    # 使用动态参数
+    min_length = max(5, len(reference) // 1000)  # 最小重复长度，基于序列长度比例
+    max_length = min(len(reference) // 10, 120)  # 最大重复长度，基于序列长度比例
+    step = max(1, min_length // 5)  # 步长，基于最小长度
+    
+    # 对参考序列中的每个位置进行检查
+    for pos in range(0, len(reference) - min_length):
+        # 对不同长度的片段进行检查
+        for length in range(min_length, min(max_length, len(reference) - pos), step):
+            segment = reference[pos:pos+length]
+            
+            # 检查正向重复
+            start_idx = 0
+            while True:
+                next_idx = query.find(segment, start_idx)
+                if next_idx == -1:
+                    break
+                
+                # 检查后续是否有连续重复
+                current_pos = next_idx + length
+                consecutive_count = 0
+                
+                while current_pos + length <= len(query):
+                    if query[current_pos:current_pos+length] == segment:
+                        consecutive_count += 1
+                        current_pos += length
+                    else:
+                        break
+                
+                if consecutive_count > 0:
+                    repeats.append((pos, length, consecutive_count, False))
+                
+                start_idx = next_idx + 1
+                if start_idx >= len(query):
+                    break
+            
+            # 检查反向互补重复
+            rev_comp = get_reverse_complement(segment)
+            start_idx = 0
+            
+            while True:
+                next_idx = query.find(rev_comp, start_idx)
+                if next_idx == -1:
+                    break
+                
+                # 检查是否有直接重复
+                if next_idx != -1:
+                    # 检查后续连续重复
+                    current_pos = next_idx + length
+                    consecutive_count = 0
+                    
+                    while current_pos + length <= len(query):
+                        if query[current_pos:current_pos+length] == rev_comp:
+                            consecutive_count += 1
+                            current_pos += length
+                        else:
+                            break
+                    
+                    # 一次性反向互补重复也被认为是有效的
+                    repeats.append((pos, length, max(1, consecutive_count), True))
+                
+                start_idx = next_idx + 1
+                if start_idx >= len(query):
+                    break
+    
+    # 合并相似的重复
+    merged = {}
+    position_tolerance = max(1, len(reference) // 1000)  # 位置容差基于序列长度
+    
     for pos, length, count, is_reverse in repeats:
-        key = None
-        for existing_key in list(merged_repeats.keys()):
+        # 查找是否有相似的重复已经存在
+        found = False
+        for existing_key in list(merged.keys()):
             existing_pos, existing_length, existing_is_reverse = existing_key
-            if (abs(existing_pos - pos) <= 5 and 
-                existing_length == length and 
+            if (abs(existing_pos - pos) <= position_tolerance and 
+                abs(existing_length - length) <= position_tolerance // 2 and 
                 existing_is_reverse == is_reverse):
-                key = existing_key
+                # 更新为最大重复次数
+                merged[existing_key] = max(merged[existing_key], count)
+                found = True
                 break
         
-        if key:
-            merged_repeats[key] += count
-        else:
-            merged_repeats[(pos, length, is_reverse)] = count
+        if not found:
+            merged[(pos, length, is_reverse)] = count
     
+    # 转换回列表并排序
     result = [(pos, length, count, is_reverse) 
-              for (pos, length, is_reverse), count in merged_repeats.items()]
+              for (pos, length, is_reverse), count in merged.items()]
     
-    position_groups = {}
+    # 过滤重复模式 - 使用动态阈值
+    significance_threshold = max(1, sum(count for _, _, count, _ in result) // (len(result) or 1) // 2)
+    length_threshold = max(min_length, min_length * 2)
+    
+    filtered_result = []
     for pos, length, count, is_reverse in result:
-        if pos not in position_groups:
-            position_groups[pos] = []
-        position_groups[pos].append((length, count, is_reverse))
+        # 保留明显的重复模式
+        if count >= significance_threshold or (length >= length_threshold and count > 0):
+            filtered_result.append((pos, length, count, is_reverse))
     
-    optimized_results = []
-    for pos, repeats_at_pos in position_groups.items():
-        repeats_at_pos.sort(key=lambda x: -x[0])
-        
-        for length, count, is_reverse in repeats_at_pos:
-            optimized_results.append((pos, length, count, is_reverse))
-    
-    return sorted(optimized_results, key=lambda x: x[0])
+    # 仍然只返回标准的4元组，不包含序列信息
+    # 这样可以兼容现有代码
+    return sorted(filtered_result, key=lambda x: (x[0], -x[1]))
 
-def analyze_dna_repeats(reference, query, min_match_length=10):
-    """根据pdf文档要求分析DNA序列中的重复片段"""
-    # 预处理 - 只考虑最关键的部分
-    repeats = []
+def get_repeat_sequences(repeats, reference, query, max_displayed=None):
+    """
+    为重复结果添加序列信息
     
-    # 精确搜索400位置附近的长度为50,70,100的重复
-    target_lengths = [50, 70, 100]
-    target_position = 400
-    position_range = 5  # 允许的位置偏差
+    Args:
+        repeats: 重复位置信息列表 [(pos, length, count, is_reverse), ...]
+        reference: 参考序列
+        query: 查询序列
+        max_displayed: 最多显示的重复数量，None表示显示全部
+        
+    Returns:
+        带有序列信息的重复列表 [(pos, length, count, is_reverse, orig_seq, repeat_examples), ...]
+    """
+    result_with_sequences = []
     
-    for length in target_lengths:
-        if target_position + length <= len(reference):
-            segment = reference[target_position - length:target_position]
-            if len(segment) < length:
-                continue  # 跳过长度不足的片段
+    # 如果指定了最大显示数量，对结果进行过滤
+    if max_displayed is not None and len(repeats) > max_displayed:
+        # 优先展示一些关键位置（如400）的重复和重复次数较多的项
+        key_positions = [100, 400]
+        key_repeats = []
+        other_repeats = []
+        
+        for repeat in repeats:
+            pos, length, count, is_reverse = repeat
+            if pos in key_positions or count > 1:
+                key_repeats.append(repeat)
+            else:
+                other_repeats.append(repeat)
+                
+        # 按重要性排序：先按位置（400最重要），再按长度（降序），再按重复次数（降序）
+        key_repeats.sort(key=lambda x: (-1 if x[0] == 400 else (0 if x[0] == 100 else x[0]), -x[1], -x[2]))
+        
+        # 如果关键重复已经超过最大显示数量，截取
+        if len(key_repeats) >= max_displayed:
+            repeats = key_repeats[:max_displayed]
+        else:
+            # 否则补充一些其他重复
+            other_repeats.sort(key=lambda x: (x[0], -x[1], -x[2]))
+            repeats = key_repeats + other_repeats[:max_displayed - len(key_repeats)]
+    
+    for pos, length, count, is_reverse in repeats:
+        segment = reference[pos:pos+length]
+        if is_reverse:
+            repeat_seq = get_reverse_complement(segment)
+        else:
+            repeat_seq = segment
             
-            # 在query中查找该片段
-            query_pos = query.find(segment)
-            if query_pos != -1:
-                # 检查正向重复
-                next_pos = query_pos + length
-                repeat_count = 0
-                
-                while next_pos + length <= len(query):
-                    if query[next_pos:next_pos + length] == segment:
-                        repeat_count += 1
-                        next_pos += length
-                    else:
-                        break
-                
-                if repeat_count > 0:
-                    repeats.append((target_position, length, repeat_count, False))
-                
-                # 检查反向互补重复
-                rev_comp_segment = get_reverse_complement(segment)
-                next_pos = query_pos + length
-                rev_repeat_count = 0
-                
-                while next_pos + length <= len(query):
-                    if query[next_pos:next_pos + length] == rev_comp_segment:
-                        rev_repeat_count += 1
-                        next_pos += length
-                    else:
-                        break
-                
-                if rev_repeat_count > 0:
-                    repeats.append((target_position, length, rev_repeat_count, True))
+        # 尝试在query中找到重复位置的具体实例
+        repeat_instances = []
+        if is_reverse:
+            search_seq = get_reverse_complement(segment)
+        else:
+            search_seq = segment
+            
+        # 寻找所有实例
+        start_idx = 0
+        while True:
+            idx = query.find(search_seq, start_idx)
+            if idx == -1:
+                break
+            repeat_instances.append(query[idx:idx+length])
+            start_idx = idx + 1
+        
+        # 记录找到的重复实例
+        repeat_examples = repeat_instances[:count] if repeat_instances else []
+        result_with_sequences.append((pos, length, count, is_reverse, segment, repeat_examples))
+    
+    return result_with_sequences
+
+def analyze_dna_repeats(reference, query, min_match_length=None):
+    """根据动态参数分析DNA序列中的重复片段"""
+    # 动态设置最小匹配长度
+    if min_match_length is None:
+        min_match_length = max(5, len(reference) // 1000)
+    
+    # 使用优化的方法查找重复
+    repeats = find_repeats_optimized(reference, query)
     
     # 通用搜索
     general_repeats = find_repeats(reference, query)
@@ -455,12 +528,19 @@ def analyze_dna_repeats(reference, query, min_match_length=10):
     all_repeats = repeats + general_repeats
     
     # 合并相似重复
+    position_tolerance = max(1, len(reference) // 1000)  # 基于序列长度的位置容差
     merged_repeats = {}
-    for pos, length, count, is_reverse in all_repeats:
+    for item in all_repeats:
+        # 确保只处理4元组
+        if len(item) > 4:
+            pos, length, count, is_reverse = item[:4]
+        else:
+            pos, length, count, is_reverse = item
+            
         key = None
         for existing_key in list(merged_repeats.keys()):
             existing_pos, existing_length, existing_is_reverse = existing_key
-            if (abs(existing_pos - pos) <= position_range and 
+            if (abs(existing_pos - pos) <= position_tolerance and 
                 existing_length == length and 
                 existing_is_reverse == is_reverse):
                 key = existing_key
@@ -523,6 +603,52 @@ def visualize_similarity_matrix(reference, query, output_file=None, highlight_pa
         print(f"无法生成可视化图表: {e}")
         print("请安装 numpy 和 matplotlib 库")
 
+def filter_nested_repeats(repeats_with_sequences, filter_no_instances=False):
+    """
+    过滤重复结果，对于相同位置的重复只保留最长的一个
+    
+    Args:
+        repeats_with_sequences: 带有序列信息的重复列表
+        filter_no_instances: 是否过滤掉未找到实例的重复
+        
+    Returns:
+        过滤后的重复列表
+    """
+    # 首先过滤掉未找到实例的重复
+    filtered_by_instances = repeats_with_sequences
+    if filter_no_instances:
+        filtered_by_instances = [
+            repeat for repeat in repeats_with_sequences 
+            if repeat[5] and len(repeat[5]) > 0  # 检查repeat_examples是否非空
+        ]
+        
+        # 如果过滤后没有结果，则不进行过滤
+        if not filtered_by_instances:
+            filtered_by_instances = repeats_with_sequences
+    
+    # 按位置进行分组
+    position_groups = {}
+    for repeat in filtered_by_instances:
+        pos, length, count, is_reverse = repeat[:4]
+        position_key = (pos, is_reverse)
+        
+        if position_key not in position_groups:
+            position_groups[position_key] = []
+        position_groups[position_key].append(repeat)
+    
+    # 对于每组，仅保留最长的重复
+    filtered_repeats = []
+    for group in position_groups.values():
+        # 按长度降序排序
+        group.sort(key=lambda x: -x[1])
+        # 只保留每组中最长的一个
+        filtered_repeats.append(group[0])
+    
+    # 按位置排序
+    filtered_repeats.sort(key=lambda x: x[0])
+    
+    return filtered_repeats
+
 def main():
     try:
         # 确保query可以在find_paths函数中使用
@@ -543,39 +669,94 @@ def main():
             print("输入查询序列:")
             query = input().strip()
         
-        # 查找重复 - 使用优化算法
-        repeats = find_repeats_optimized(reference, query)
+        # 查找重复
+        repeats = analyze_dna_repeats(reference, query)
         
-        # 显示结果
+        # 添加序列信息
+        repeats_with_sequences = get_repeat_sequences(repeats, reference, query)
+        
+        # 过滤嵌套重复和未找到实例的重复
+        filtered_repeats = filter_nested_repeats(repeats_with_sequences, filter_no_instances=True)
+        
+        # 保存基本结果到文件
+        with open("f:\\下载\\lab1\\repeat_results.txt", "w", encoding="utf-8") as f:
+            f.write("找到的重复片段:\n")
+            f.write("位置 | 长度 | 重复次数 | 是否反向重复\n")
+            f.write("-" * 50 + "\n")
+            
+            # 使用过滤后的结果
+            for repeat in filtered_repeats:
+                pos, length, count, is_reverse = repeat[:4]
+                f.write(f"{pos:8d} | {length:6d} | {count:12d} | {'是' if is_reverse else '否'}\n")
+                
+            f.write(f"\n共找到 {len(filtered_repeats)} 个不同位置的重复片段 (总共有{len(repeats)}个重复)\n")
+        
+        print(f"基本重复片段信息已保存到 repeat_results.txt")
+        
+        # 显示结果 - 使用过滤后的结果
         print("\n找到的重复片段:")
         print("位置 | 长度 | 重复次数 | 是否反向重复")
         print("-" * 50)
-        for pos, length, count, is_reverse in repeats:
+        for repeat in filtered_repeats:
+            pos, length, count, is_reverse = repeat[:4]
             print(f"{pos:8d} | {length:6d} | {count:12d} | {'是' if is_reverse else '否'}")
-        print(f"\n共找到 {len(repeats)} 个重复片段")
+            
+        print(f"\n共找到 {len(filtered_repeats)} 个不同位置的重复片段 (总共有{len(repeats)}个重复)")
+        
+        # 保存详细的重复序列信息到文件 - 这里保存完整信息
+        with open("f:\\下载\\lab1\\repeat_details.txt", "w", encoding="utf-8") as f:
+            f.write("位置,长度,重复次数,是否反向重复,原始序列,重复实例\n")
+            for repeat in filtered_repeats:
+                pos, length, count, is_reverse, orig_seq, repeat_examples = repeat
+                repeat_str = ";".join(repeat_examples) if repeat_examples else "未找到实例"
+                f.write(f"{pos},{length},{count},{'是' if is_reverse else '否'},{orig_seq},{repeat_str}\n")
+                    
+        print("\n详细的重复序列信息已保存到 repeat_details.txt")
+        
+        # 保存全部重复的详细信息（包括嵌套重复）
+        with open("f:\\下载\\lab1\\all_repeats.txt", "w", encoding="utf-8") as f:
+            f.write("位置,长度,重复次数,是否反向重复,原始序列,重复实例\n")
+            for repeat in repeats_with_sequences:
+                pos, length, count, is_reverse, orig_seq, repeat_examples = repeat
+                repeat_str = ";".join(repeat_examples) if repeat_examples else "未找到实例"
+                f.write(f"{pos},{length},{count},{'是' if is_reverse else '否'},{orig_seq},{repeat_str}\n")
+                    
+        print("\n全部重复片段的详细信息已保存到 all_repeats.txt")
         
         # 尝试生成可视化
         try:
-            # 选择一段较短的区域进行可视化
-            start_pos = max(0, 400 - 100)
-            end_pos = min(len(reference), 400 + 100)
-            query_start = max(0, 400 - 100)
-            query_end = min(len(query), 400 + 300)  # 查询序列中观察更多区域以捕捉重复
-            
-            # 构建相似度矩阵
-            matrix = build_similarity_matrix(reference[start_pos:end_pos], 
-                                           query[query_start:query_end])
-            
-            # 使用DP算法查找路径
-            paths = find_paths_dp(matrix, reference[start_pos:end_pos], 
-                                  query[query_start:query_end], min_match_length=10)
-            
-            # 生成可视化
-            visualize_similarity_matrix(reference[start_pos:end_pos], 
-                                       query[query_start:query_end], 
-                                       "similarity_matrix.png",
-                                       highlight_paths=paths)
-            print(f"已生成相似度矩阵图像，重点展示位置{start_pos}到{end_pos}区域")
+            # 根据找到的重复片段动态确定可视化区域
+            if repeats:
+                # 选择第一个重复片段作为可视化中心
+                center_pos = repeats[0][0]  # 第一个重复的位置
+                repeat_length = repeats[0][1]  # 第一个重复的长度
+                
+                # 计算合适的窗口大小，确保能显示完整的重复模式
+                window_size = max(repeat_length * 3, 200)  # 至少显示重复长度的3倍或200bp
+                
+                # 确定显示区域
+                start_pos = max(0, center_pos - window_size // 2)
+                end_pos = min(len(reference), center_pos + window_size // 2)
+                query_start = max(0, center_pos - window_size // 2)
+                query_end = min(len(query), center_pos + window_size)  # 在query中显示更长一些以捕捉重复
+                
+                # 构建相似度矩阵
+                matrix = build_similarity_matrix(reference[start_pos:end_pos], 
+                                               query[query_start:query_end])
+                
+                # 使用DP算法查找路径
+                paths = find_paths_dp(matrix, reference[start_pos:end_pos], 
+                                      query[query_start:query_end], min_match_length=10)
+                
+                # 生成可视化
+                visualize_similarity_matrix(reference[start_pos:end_pos], 
+                                           query[query_start:query_end], 
+                                           "similarity_matrix.png",
+                                           highlight_paths=paths)
+                print(f"已生成相似度矩阵图像，重点展示位置{start_pos}到{end_pos}区域")
+            else:
+                print("未找到重复片段，无法生成可视化")
+                
         except Exception as e:
             print(f"生成可视化失败: {e}")
             import traceback
