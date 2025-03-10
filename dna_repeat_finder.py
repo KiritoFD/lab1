@@ -491,52 +491,31 @@ def visualize_similarity_matrix(reference, query, output_file=None, highlight_pa
         import numpy as np
         import matplotlib.pyplot as plt
         from matplotlib.colors import LinearSegmentedColormap
-        import matplotlib.font_manager as fm
-        
-        # 尝试设置支持中文的字体
-        try:
-            # 检查是否有支持中文的字体
-            chinese_fonts = [f.name for f in fm.fontManager.ttflist 
-                            if ('SimHei' in f.name or 'Microsoft YaHei' in f.name or
-                                'SimSun' in f.name or 'WenQuanYi' in f.name or
-                                'Noto Sans CJK' in f.name or 'Droid Sans' in f.name)]
-            
-            if chinese_fonts:
-                plt.rcParams['font.family'] = chinese_fonts[0]
-            else:
-                # 如果没有找到中文字体，使用无衬线字体并避免使用中文标签
-                plt.rcParams['font.family'] = 'sans-serif'
-        except:
-            # 如果出错，使用默认字体设置
-            pass
         
         # 构建相似度矩阵
         matrix = build_similarity_matrix(reference, query)
         matrix_np = np.array(matrix)
         
-        # 创建自定义颜色映射
-        colors = [(0.7, 0, 0), (1, 1, 1), (0, 0.7, 0)]  # 红色-白色-绿色
-        cmap = LinearSegmentedColormap.from_list('custom_diverging', colors, N=256)
+        # 创建二值颜色映射 - 仅显示匹配(白色)和不匹配(黑色)
+        plt.figure(figsize=(10, 10))
+        plt.imshow(matrix_np, cmap='binary', aspect='equal', 
+                  interpolation='none', origin='upper')
         
-        # 创建图像
-        plt.figure(figsize=(12, 10))
-        im = plt.imshow(matrix_np, cmap=cmap, aspect='auto', 
-                   interpolation='nearest', origin='upper',
-                   vmin=-1, vmax=1)
-        plt.colorbar(im, label='Similarity (1:Match, -1:Mismatch)')
-        plt.title('Reference vs Query Similarity Matrix')
-        plt.xlabel('Query Position')
-        plt.ylabel('Reference Position')
+        # 设置更简洁的图表样式
+        plt.tick_params(axis='both', which='both', bottom=False, top=False, 
+                       left=False, right=False, labelbottom=False, labelleft=False)
+        plt.box(False)
         
         # 高亮显示找到的路径
         if highlight_paths:
             for path in highlight_paths:
                 path_i = [p[0] for p in path]
                 path_j = [p[1] for p in path]
-                plt.plot(path_j, path_i, 'b-', linewidth=1.5, alpha=0.7)
+                # 使用蓝色显示路径，增大线宽以便更清晰可见
+                plt.plot(path_j, path_i, 'b-', linewidth=2, alpha=0.7)
         
         if output_file:
-            plt.savefig(output_file, dpi=300, bbox_inches='tight')
+            plt.savefig(output_file, dpi=300, bbox_inches='tight', facecolor='white')
             print(f"相似度矩阵已保存至 {output_file}")
         else:
             plt.show()
