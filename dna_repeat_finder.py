@@ -336,14 +336,14 @@ def find_repeats(reference, query):
 
 def find_repeats_optimized(reference, query):
     """
-    使用优化的算法寻找重复模式，不使用任何硬编码值
+    使用优化的算法寻找重复模式，只找两串不一样部分的重复
     """
     repeats = []
     
     # 使用动态参数
-    min_length = max(5, len(reference) // 1000)  # 最小重复长度，基于序列长度比例
-    max_length = min(len(reference) // 10, 120)  # 最大重复长度，基于序列长度比例
-    step = max(1, min_length // 5)  # 步长，基于最小长度
+    min_length = max(5, len(reference) // 1000)  # 最小重复长度
+    max_length = min(len(reference) // 10, 120)  # 最大重复长度
+    step = max(1, min_length // 5)  # 步长
     
     # 对参考序列中的每个位置进行检查
     for pos in range(0, len(reference) - min_length):
@@ -370,7 +370,9 @@ def find_repeats_optimized(reference, query):
                         break
                 
                 if consecutive_count > 0:
-                    repeats.append((pos, length, consecutive_count, False))
+                    # 检查原序列和重复序列是否不同
+                    if segment != query[next_idx:next_idx+length]:
+                        repeats.append((pos, length, consecutive_count, False))
                 
                 start_idx = next_idx + 1
                 if start_idx >= len(query):
@@ -385,21 +387,20 @@ def find_repeats_optimized(reference, query):
                 if next_idx == -1:
                     break
                 
-                # 检查是否有直接重复
-                if next_idx != -1:
-                    # 检查后续连续重复
-                    current_pos = next_idx + length
-                    consecutive_count = 0
-                    
-                    while current_pos + length <= len(query):
-                        if query[current_pos:current_pos+length] == rev_comp:
-                            consecutive_count += 1
-                            current_pos += length
-                        else:
-                            break
-                    
-                    # 一次性反向互补重复也被认为是有效的
-                    repeats.append((pos, length, max(1, consecutive_count), True))
+                # 反向互补肯定是不同的，直接添加
+                # 检查后续连续重复
+                current_pos = next_idx + length
+                consecutive_count = 0
+                
+                while current_pos + length <= len(query):
+                    if query[current_pos:current_pos+length] == rev_comp:
+                        consecutive_count += 1
+                        current_pos += length
+                    else:
+                        break
+                
+                # 反向互补一定是不同的
+                repeats.append((pos, length, max(1, consecutive_count), True))
                 
                 start_idx = next_idx + 1
                 if start_idx >= len(query):
@@ -606,29 +607,35 @@ def visualize_similarity_matrix(reference, query, output_file=None, highlight_pa
 def filter_nested_repeats(repeats_with_sequences, filter_no_instances=False):
     """
     过滤重复结果，对于相同位置的重复只保留最长的一个
-    
-    Args:
-        repeats_with_sequences: 带有序列信息的重复列表
-        filter_no_instances: 是否过滤掉未找到实例的重复
-        
-    Returns:
-        过滤后的重复列表
     """
     # 首先过滤掉未找到实例的重复
-    filtered_by_instances = repeats_with_sequences
+    filtered = repeats_with_sequences
     if filter_no_instances:
-        filtered_by_instances = [
-            repeat for repeat in repeats_with_sequences 
+        filtered = [
+            repeat for repeat in filtered 
             if repeat[5] and len(repeat[5]) > 0  # 检查repeat_examples是否非空
         ]
         
         # 如果过滤后没有结果，则不进行过滤
-        if not filtered_by_instances:
-            filtered_by_instances = repeats_with_sequences
+        if not filtered:
+            filtered = repeats_with_sequences
+    
+    # 只保留原序列和重复序列不同的重复
+    different_repeats = []
+    for repeat in filtered:
+        orig_seq = repeat[4]
+        if repeat[5]:  # 有找到实例
+            repeat_seq = repeat[5][0]  # 第一个重复实例
+            # 反向重复总是不同的，正向重复需要比较
+            if repeat[3] or orig_seq != repeat_seq:  # 是反向重复或原序列和重复序列不同
+                different_repeats.append(repeat)
+    
+    # 如果过滤后没有结果，则不进行此项过滤
+    filtered = different_repeats if different_repeats else filtered
     
     # 按位置进行分组
     position_groups = {}
-    for repeat in filtered_by_instances:
+    for repeat in filtered:
         pos, length, count, is_reverse = repeat[:4]
         position_key = (pos, is_reverse)
         
@@ -669,13 +676,15 @@ def main():
             print("输入查询序列:")
             query = input().strip()
         
-        # 查找重复
-        repeats = analyze_dna_repeats(reference, query)
+        # 查找重复 - 只找两串不一样的部分
+        repeats = find_repeats_optimized(reference, query)
         
         # 添加序列信息
         repeats_with_sequences = get_repeat_sequences(repeats, reference, query)
         
-        # 过滤嵌套重复和未找到实例的重复
+        # 过滤重复:
+        # 1. 只保留每个位置最长的重复
+        # 2. 过滤掉未找到实例的重复
         filtered_repeats = filter_nested_repeats(repeats_with_sequences, filter_no_instances=True)
         
         # 保存基本结果到文件
