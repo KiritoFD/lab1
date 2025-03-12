@@ -1,4 +1,4 @@
-#include "../include/dna_graph.h"
+#include "../include/core/dna_graph.h"
 
 // Build a directed acyclic graph representation of the DNA sequences
 DNAGraph* build_dna_graph(const char* reference, int ref_len, const char* query, int query_len) {

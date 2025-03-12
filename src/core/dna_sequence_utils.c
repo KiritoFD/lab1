@@ -1,10 +1,10 @@
 // Utility functions for DNA sequence processing
 // This replaces the old monolithic dna_repeat_finder.c file
 
-#include "../include/dna_common.h"
-#include "../include/dna_io.h"
-#include "../include/dna_traditional.h"
-#include "../include/dna_graph.h"
+#include "../include/core/dna_common.h"
+#include "../include/core/dna_io.h"
+#include "../include/core/dna_traditional.h"
+#include "../include/core/dna_graph.h"
 
 // Any additional utility functions that don't fit elsewhere can go here.
 // This file serves as a placeholder replacement for dna_repeat_finder.c

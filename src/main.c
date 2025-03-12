@@ -1,18 +1,30 @@
-#include "../include/dna_common.h"
-#include "../include/dna_io.h"
-#include "../include/dna_traditional.h"
-#include "../include/dna_graph.h"
+#include "../include/core/dna_common.h"
+#include "../include/core/dna_io.h"
+#include "../include/core/dna_traditional.h"
+#include "../include/core/dna_graph.h"
 
-// Main function
+// Default input file paths
+#define DEFAULT_REFERENCE_FILE "reference.txt"
+#define DEFAULT_QUERY_FILE "query.txt"
+
+// The main function
 int main(int argc, char *argv[]) {
-    // Process command line arguments
-    if (argc != 3) {
-        print_usage(argv[0]);
-        return EXIT_FAILURE;
+    char* reference_file;
+    char* query_file;
+    
+    // Check if file paths are provided as arguments, otherwise use defaults
+    if (argc == 3) {
+        reference_file = argv[1];
+        query_file = argv[2];
+        printf("Using provided file paths:\n");
+    } else {
+        reference_file = DEFAULT_REFERENCE_FILE;
+        query_file = DEFAULT_QUERY_FILE;
+        printf("Using default file paths:\n");
     }
     
-    char* reference_file = argv[1];
-    char* query_file = argv[2];
+    printf("Reference file: %s\n", reference_file);
+    printf("Query file: %s\n", query_file);
     
     printf("DNA Repeat Finder\n");
     printf("Version: 2.0 with DAG-based approach\n\n");
@@ -84,9 +96,11 @@ int main(int argc, char *argv[]) {
     printf("\nGraph-based approach found %d unique repeat patterns\n", filtered_graph_count);
     printf("Graph processing time: %.2f milliseconds\n", graph_time);
     
-    // Save graph-based results
+    // Save graph-based results to console
     if (filtered_graph_repeats) {
-        save_results(filtered_graph_repeats, filtered_graph_count, num_graph_repeats);
+        for (int i = 0; i < filtered_graph_count; i++) {
+            printf("Repeat Pattern %d: Position: %d, Length: %d, Count: %d, Is Reverse: %d\n", i+1, filtered_graph_repeats[i].position, filtered_graph_repeats[i].length, filtered_graph_repeats[i].count, filtered_graph_repeats[i].is_reverse);
+        }
         free_repeat_patterns(filtered_graph_repeats, filtered_graph_count);
     }
     

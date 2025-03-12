@@ -366,5 +366,5 @@ int generator_main(int argc, char* argv[]) {
 
 // This is the actual main function that will be called
 int main(int argc, char* argv[]) {
-    return generator_main(argc, argv[]);
+    return generator_main(argc, argv);
 }

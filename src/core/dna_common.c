@@ -1,4 +1,4 @@
-#include "../include/dna_common.h"
+#include "../include/core/dna_common.h"
 
 // Get the reverse complement of a DNA sequence
 char* get_reverse_complement(const char* sequence, int length) {

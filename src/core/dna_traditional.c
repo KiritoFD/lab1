@@ -1,5 +1,5 @@
-#include "../include/dna_traditional.h"
-#include "../include/cpu_optimize.h"
+#include "../include/core/dna_traditional.h"
+#include "../include/core/cpu_optimize.h"
 
 // Build similarity matrix between reference and query - optimized with parallel processing and AVX2
 int** build_similarity_matrix(const char* reference, int ref_len, const char* query, int query_len) {

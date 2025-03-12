@@ -1,4 +1,4 @@
-#include "../include/dna_io.h"
+#include "../include/core/dna_io.h"
 #include <sys/stat.h>
 #include <fcntl.h>
 #include <unistd.h>
