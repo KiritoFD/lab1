@@ -249,3 +249,117 @@ int main(int argc, char* argv[]) {
     
     return 0;
 }
+
+// Tool for generating test DNA sequences
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <time.h>
+
+void print_usage_generator() {
+    printf("DNA Test Sequence Generator\n");
+    printf("Usage: generate_test_sequences <output_file> <sequence_length> [repeat_pattern] [repeat_count]\n");
+    printf("  output_file     - File to save the generated sequence\n");
+    printf("  sequence_length - Length of sequence to generate\n");
+    printf("  repeat_pattern  - Optional DNA pattern to repeat (default: random)\n");
+    printf("  repeat_count    - How many times to insert the pattern (default: 10)\n");
+}
+
+char random_nucleotide() {
+    const char nucleotides[] = "ATGC";
+    return nucleotides[rand() % 4];
+}
+
+// Generate a random DNA sequence with optional repeats
+void generate_dna_sequence(const char* filename, int length, const char* repeat_pattern, int repeat_count) {
+    FILE* file = fopen(filename, "w");
+    if (!file) {
+        fprintf(stderr, "Cannot create output file %s\n", filename);
+        return;
+    }
+    
+    // Initialize the random number generator
+    srand(time(NULL));
+    
+    // Check if we have a repeat pattern
+    int pattern_length = repeat_pattern ? strlen(repeat_pattern) : 0;
+    
+    // Calculate total size needed
+    int random_bases = length - (pattern_length * repeat_count);
+    if (random_bases < 0) {
+        fprintf(stderr, "Warning: Repeat pattern * count exceeds requested length.\n");
+        random_bases = 0;
+    }
+    
+    // Generate the sequence
+    int total_written = 0;
+    
+    // Write random bases before first repeat
+    int initial_random = random_bases / (repeat_count + 1);
+    for (int i = 0; i < initial_random; i++) {
+        fputc(random_nucleotide(), file);
+        total_written++;
+    }
+    
+    // Insert repeats with random bases between them
+    for (int i = 0; i < repeat_count; i++) {
+        // Write the repeat pattern
+        if (pattern_length > 0) {
+            fputs(repeat_pattern, file);
+            total_written += pattern_length;
+        }
+        
+        // Write random bases between repeats
+        int random_segment = (i == repeat_count - 1) ? (random_bases - initial_random) : (random_bases / (repeat_count + 1));
+        for (int j = 0; j < random_segment; j++) {
+            fputc(random_nucleotide(), file);
+            total_written++;
+        }
+    }
+    
+    // Add any remaining bases to reach the exact length
+    while (total_written < length) {
+        fputc(random_nucleotide(), file);
+        total_written++;
+    }
+    
+    fclose(file);
+    printf("Generated DNA sequence of length %d with %d repeats of pattern '%s'\n", 
+           total_written, repeat_count, repeat_pattern ? repeat_pattern : "random");
+}
+
+// Main function for the generator
+int main(int argc, char* argv[]) {
+    if (argc < 3 || argc > 5) {
+        print_usage_generator();
+        return 1;
+    }
+    
+    const char* filename = argv[1];
+    int length = atoi(argv[2]);
+    
+    if (length <= 0) {
+        fprintf(stderr, "Error: Sequence length must be positive\n");
+        return 1;
+    }
+    
+    const char* repeat_pattern = NULL;
+    int repeat_count = 10;
+    
+    if (argc >= 4) {
+        repeat_pattern = argv[3];
+    }
+    
+    if (argc == 5) {
+        repeat_count = atoi(argv[4]);
+        if (repeat_count < 0) {
+            fprintf(stderr, "Error: Repeat count must be non-negative\n");
+            return 1;
+        }
+    }
+    
+    generate_dna_sequence(filename, length, repeat_pattern, repeat_count);
+    
+    return 0;
+}
