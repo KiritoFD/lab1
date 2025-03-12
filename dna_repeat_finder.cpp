@@ -5,6 +5,13 @@
 #include <map>
 #include <algorithm>
 #include <iomanip>
+#include <thread>
+#include <future>
+#include <locale>   // 添加 locale 头文件
+#include <codecvt>  // 添加 codecvt 头文件
+#include <chrono> // 添加计时头文件
+#include <mutex>
+
 // 重复信息的结构体
 struct RepeatInfo {
     int position;
@@ -46,6 +53,157 @@ std::vector<std::vector<int>> build_similarity_matrix(const std::string& referen
     }
     
     return matrix;
+}
+
+// 线程安全地添加重复信息
+class ThreadSafeRepeatList {
+public:
+    void addRepeat(const RepeatInfo& repeat) {
+        std::lock_guard<std::mutex> lock(mutex_);
+        repeats_.push_back(repeat);
+    }
+    
+    std::vector<RepeatInfo> getRepeats() const {
+        std::lock_guard<std::mutex> lock(mutable_mutex_);
+        return repeats_;
+    }
+
+private:
+    std::vector<RepeatInfo> repeats_;
+    mutable std::mutex mutable_mutex_;
+    std::mutex mutex_;
+};
+
+// 并行查找重复
+std::vector<RepeatInfo> find_repeats_parallel(const std::string& reference, const std::string& query, int num_threads) {
+    ThreadSafeRepeatList safe_repeats;
+    
+    // 使用动态参数
+    int min_length = std::max(5, static_cast<int>(reference.length() / 1000));
+    int max_length = std::min(static_cast<int>(reference.length() / 10), 120);
+    int step = std::max(1, min_length / 5);
+    
+    std::cout << "使用 " << num_threads << " 线程" << std::endl;
+    
+    // 将参考序列分成多个部分
+    std::vector<std::pair<int, int>> ranges;
+    int chunk_size = reference.length() / num_threads;
+    for (int i = 0; i < num_threads; ++i) {
+        int start = i * chunk_size;
+        int end = (i == num_threads - 1) ? reference.length() : (i + 1) * chunk_size;
+        ranges.push_back({start, end});
+    }
+    
+    // 启动线程
+    std::vector<std::future<void>> futures;
+    for (const auto& range : ranges) {
+        futures.push_back(std::async(std::launch::async, 
+            [&](int start, int end) {
+                for (int pos = start; pos <= end - min_length; ++pos) {
+                    for (int length = min_length; length <= std::min(max_length, static_cast<int>(reference.length() - pos)); length += step) {
+                        std::string segment = reference.substr(pos, length);
+                        
+                        // 检查正向重复
+                        size_t start_idx = 0;
+                        while (true) {
+                            size_t next_idx = query.find(segment, start_idx);
+                            if (next_idx == std::string::npos) {
+                                break;
+                            }
+                            
+                            // 检查后续是否有连续重复
+                            size_t current_pos = next_idx + length;
+                            int consecutive_count = 0;
+                            
+                            while (current_pos + length <= query.length()) {
+                                if (query.substr(current_pos, length) == segment) {
+                                    consecutive_count++;
+                                    current_pos += length;
+                                } else {
+                                    break;
+                                }
+                            }
+                            
+                            if (consecutive_count > 0) {
+                                // 检查是否是不同的序列
+                                if (segment != query.substr(next_idx, length)) {
+                                    RepeatInfo info;
+                                    info.position = pos;
+                                    info.length = length;
+                                    info.count = consecutive_count;
+                                    info.is_reverse = false;
+                                    info.orig_seq = segment;
+                                    
+                                    // 添加重复实例
+                                    for (int i = 0; i < consecutive_count; ++i) {
+                                        info.repeat_examples.push_back(query.substr(next_idx + length * (i + 1), length));
+                                    }
+                                    
+                                    safe_repeats.addRepeat(info);
+                                }
+                            }
+                            
+                            start_idx = next_idx + 1;
+                            if (start_idx >= query.length()) {
+                                break;
+                            }
+                        }
+                        
+                        // 检查反向互补重复
+                        std::string rev_comp = get_reverse_complement(segment);
+                        start_idx = 0;
+                        
+                        while (true) {
+                            size_t next_idx = query.find(rev_comp, start_idx);
+                            if (next_idx == std::string::npos) {
+                                break;
+                            }
+                            
+                            // 检查后续是否有连续重复
+                            size_t current_pos = next_idx + length;
+                            int consecutive_count = 0;
+                            
+                            while (current_pos + length <= query.length()) {
+                                if (query.substr(current_pos, length) == rev_comp) {
+                                    consecutive_count++;
+                                    current_pos += length;
+                                } else {
+                                    break;
+                                }
+                            }
+                            
+                            // 反向互补必然是不同的
+                            RepeatInfo info;
+                            info.position = pos;
+                            info.length = length;
+                            info.count = std::max(1, consecutive_count);
+                            info.is_reverse = true;
+                            info.orig_seq = segment;
+                            
+                            // 添加重复实例
+                            info.repeat_examples.push_back(query.substr(next_idx, length));
+                            for (int i = 0; i < consecutive_count; ++i) {
+                                info.repeat_examples.push_back(query.substr(next_idx + length * (i + 1), length));
+                            }
+                            
+                            safe_repeats.addRepeat(info);
+                            
+                            start_idx = next_idx + 1;
+                            if (start_idx >= query.length()) {
+                                break;
+                            }
+                        }
+                    }
+                }
+            }, range.first, range.second));
+    }
+    
+    // 等待所有线程完成
+    for (auto& future : futures) {
+        future.get();
+    }
+    
+    return safe_repeats.getRepeats();
 }
 
 // 寻找重复
@@ -382,8 +540,21 @@ int main() {
         return 1;
     }
     
-    // 查找重复 - 可以选择使用标准方法或动态规划方法
-    std::vector<RepeatInfo> repeats = find_repeats(reference, query);
+    // 确定线程数量 - 针对 AMD Ryzen 9 7940HX 进行优化
+    // Ryzen 9 7940HX 有 8 核心 16 线程
+    int num_threads = 16;
+    
+    // 记录开始时间
+    auto start_time = std::chrono::high_resolution_clock::now();
+    
+    // 查找重复 - 使用并行方法
+    std::vector<RepeatInfo> repeats = find_repeats_parallel(reference, query, num_threads);
+    
+    // 记录结束时间
+    auto end_time = std::chrono::high_resolution_clock::now();
+    
+    // 计算执行时间
+    auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time);
     
     // 使用动态规划方法查找重复
     std::vector<RepeatInfo> dp_repeats = find_repeats_dp(reference, query);
@@ -394,40 +565,46 @@ int main() {
     // 过滤嵌套重复
     std::vector<RepeatInfo> filtered_repeats = filter_nested_repeats(repeats);
     
+    // 设置控制台输出编码为 UTF-8
+    std::locale utf8_locale(std::locale(), new std::codecvt_utf8<wchar_t>);
+    std::wcout.imbue(utf8_locale);
+    
     // 输出结果
-    std::cout << "\n找到的重复片段:" << std::endl;
-    std::cout << "位置 | 长度 | 重复次数 | 是否反向重复 | 原始片段 | 重复实例" << std::endl;
-    std::cout << "----------------------------------------------------------------------" << std::endl;
+    std::wcout << L"\n找到的重复片段:" << std::endl;
+    std::wcout << L"位置 | 长度 | 重复次数 | 是否反向重复 | 原始片段 | 重复实例" << std::endl;
+    std::wcout << L"----------------------------------------------------------------------" << std::endl;
     
     for (const auto& repeat : filtered_repeats) {
         // 显示序列的前10个碱基，太长的用...表示
-        std::string orig_display = repeat.orig_seq.substr(0, 10);
+        std::wstring orig_display = std::wstring(repeat.orig_seq.begin(), repeat.orig_seq.end()).substr(0, 10);
         if (repeat.orig_seq.length() > 10) {
-            orig_display += "...";
+            orig_display += L"...";
         }
         
         // 显示重复实例
-        std::string repeat_display;
+        std::wstring repeat_display;
         if (!repeat.repeat_examples.empty()) {
-            repeat_display = repeat.repeat_examples[0].substr(0, 10);
+            repeat_display = std::wstring(repeat.repeat_examples[0].begin(), repeat.repeat_examples[0].end()).substr(0, 10);
             if (repeat.repeat_examples[0].length() > 10) {
-                repeat_display += "...";
+                repeat_display += L"...";
             }
             
             if (repeat.repeat_examples.size() > 1) {
-                repeat_display += " (共" + std::to_string(repeat.repeat_examples.size()) + "个实例)";
+                repeat_display += L" (共" + std::to_wstring(repeat.repeat_examples.size()) + L"个实例)";
             }
         } else {
-            repeat_display = "未找到实例";
+            repeat_display = L"未找到实例";
         }
         
-        std::printf("%8d | %6d | %12d | %s | %s | %s\n", 
+        std::wprintf(L"%8d | %6d | %12d | %s | %s | %s\n", 
                     repeat.position, repeat.length, repeat.count, 
-                    (repeat.is_reverse ? "是" : "否"), 
+                    (repeat.is_reverse ? L"是" : L"否"), 
                     orig_display.c_str(), repeat_display.c_str());
     }
     
-    std::cout << "\n共找到 " << filtered_repeats.size() << " 个重复片段" << std::endl;
+    std::wcout << L"\n共找到 " << filtered_repeats.size() << L" 个重复片段" << std::endl;
+    
+    
     
     // 保存结果到文件
     try {
@@ -479,6 +656,8 @@ int main() {
     } catch (const std::exception& e) {
         std::cerr << "写入文件时出错: " << e.what() << std::endl;
     }
-    
+    // 输出执行时间
+    std::wcout.imbue(std::locale("")); // 使用用户默认locale
+    std::wcout << L"查找重复耗时: " << duration.count() << L" 毫秒" << std::endl;
     return 0;
 }

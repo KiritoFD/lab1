@@ -1,3 +1,5 @@
+import time
+
 def get_reverse_complement(sequence):
     """生成DNA序列的反向互补序列"""
     complement_map = {'A': 'T', 'T': 'A', 'G': 'C', 'C': 'G'}
@@ -676,8 +678,16 @@ def main():
             print("输入查询序列:")
             query = input().strip()
         
-        # 查找重复 - 只找两串不一样的部分
-        repeats = find_repeats_optimized(reference, query)
+        # 记录开始时间
+        start_time = time.time()
+        
+        # 查找重复
+        repeats = analyze_dna_repeats(reference, query)
+        
+        # 记录结束时间
+        end_time = time.time()
+        
+
         
         # 添加序列信息
         repeats_with_sequences = get_repeat_sequences(repeats, reference, query)
@@ -701,7 +711,9 @@ def main():
             f.write(f"\n共找到 {len(filtered_repeats)} 个不同位置的重复片段 (总共有{len(repeats)}个重复)\n")
         
         print(f"基本重复片段信息已保存到 repeat_results.txt")
-        
+                # 计算执行时间
+        execution_time = end_time - start_time
+        print(f"查找重复耗时: {execution_time * 1000:.2f} 毫秒")
         # 显示结果 - 使用过滤后的结果
         print("\n找到的重复片段:")
         print("位置 | 长度 | 重复次数 | 是否反向重复")
