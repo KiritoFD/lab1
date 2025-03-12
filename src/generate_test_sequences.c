@@ -272,7 +272,7 @@ char random_nucleotide() {
 }
 
 // Generate a random DNA sequence with optional repeats
-void generate_dna_sequence(const char* filename, int length, const char* repeat_pattern, int repeat_count) {
+void generate_test_dna_sequence(const char* filename, int length, const char* repeat_pattern, int repeat_count) {
     FILE* file = fopen(filename, "w");
     if (!file) {
         fprintf(stderr, "Cannot create output file %s\n", filename);
@@ -329,8 +329,8 @@ void generate_dna_sequence(const char* filename, int length, const char* repeat_
            total_written, repeat_count, repeat_pattern ? repeat_pattern : "random");
 }
 
-// Main function for the generator
-int main(int argc, char* argv[]) {
+// Main function for the generator - renamed to avoid conflict
+int generator_main(int argc, char* argv[]) {
     if (argc < 3 || argc > 5) {
         print_usage_generator();
         return 1;
@@ -359,7 +359,12 @@ int main(int argc, char* argv[]) {
         }
     }
     
-    generate_dna_sequence(filename, length, repeat_pattern, repeat_count);
+    generate_test_dna_sequence(filename, length, repeat_pattern, repeat_count);
     
     return 0;
+}
+
+// This is the actual main function that will be called
+int main(int argc, char* argv[]) {
+    return generator_main(argc, argv[]);
 }
