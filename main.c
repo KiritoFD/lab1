@@ -1,6 +1,124 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
+#include <stdbool.h>
 #include "dag_algorithms.h"
+
+// 辅助函数：反转字符串
+void reverseString(char* str) {
+    int len = strlen(str);
+    for (int i = 0; i < len / 2; i++) {
+        char temp = str[i];
+        str[i] = str[len - i - 1];
+        str[len - i - 1] = temp;
+    }
+}
+
+// 辅助函数：检查重复序列
+void findRepeats(const char* query, const char* reference, FILE* outputFile) {
+    int queryLen = strlen(query);
+    int refLen = strlen(reference);
+
+    for (int len = 50; len <= 100; len++) { // 检查长度为50到100的重复序列
+        for (int i = 0; i <= queryLen - len; i++) {
+            char subQuery[101];
+            strncpy(subQuery, query + i, len);
+            subQuery[len] = '\0';
+
+            // 检查正向重复
+            for (int j = 0; j <= refLen - len; j++) {
+                char subRef[101];
+                strncpy(subRef, reference + j, len);
+                subRef[len] = '\0';
+
+                if (strcmp(subQuery, subRef) == 0) {
+                    fprintf(outputFile, "%d,%d,1,否,%s,%s\n", i + 1, len, subQuery, subRef);
+                }
+            }
+
+            // 检查反向重复
+            char revSubQuery[101];
+            strncpy(revSubQuery, subQuery, len);
+            revSubQuery[len] = '\0';
+            reverseString(revSubQuery);
+
+            for (int j = 0; j <= refLen - len; j++) {
+                char subRef[101];
+                strncpy(subRef, reference + j, len);
+                subRef[len] = '\0';
+
+                if (strcmp(revSubQuery, subRef) == 0) {
+                    fprintf(outputFile, "%d,%d,1,是,%s,%s\n", i + 1, len, subQuery, subRef);
+                }
+            }
+        }
+    }
+}
+
+// 辅助函数：从文件读取图数据
+Graph* readGraphFromFile(const char* filename) {
+    FILE* file = fopen(filename, "r");
+    if (!file) {
+        fprintf(stderr, "无法打开文件: %s\n", filename);
+        return NULL;
+    }
+
+    int vertices, edges;
+    if (fscanf(file, "%d %d", &vertices, &edges) != 2) {
+        fprintf(stderr, "文件格式错误: 顶点和边数\n");
+        fclose(file);
+        return NULL;
+    }
+
+    Graph* graph = createGraph(vertices);
+    if (!graph) {
+        fclose(file);
+        return NULL;
+    }
+
+    for (int i = 0; i < edges; i++) {
+        int src, dest, weight, resource;
+        if (fscanf(file, "%d %d %d %d", &src, &dest, &weight, &resource) == 4) {
+            addResourceEdge(graph, src, dest, weight, resource);
+        } else if (fscanf(file, "%d %d %d", &src, &dest, &weight) == 3) {
+            addEdge(graph, src, dest, weight);
+        } else {
+            fprintf(stderr, "文件格式错误: 边数据\n");
+            freeGraph(graph);
+            fclose(file);
+            return NULL;
+        }
+    }
+
+    fclose(file);
+    return graph;
+}
+
+// 辅助函数：将路径信息写入文件
+void writePathToFile(FILE* file, Path* path) {
+    if (!path) {
+        fprintf(file, "路径: NULL\n");
+        return;
+    }
+
+    fprintf(file, "路径: 长度 = %d, 序列 = [", path->length);
+    for (int i = 0; i < path->length; i++) {
+        fprintf(file, "%d", path->vertices[i]);
+        if (i < path->length - 1) {
+            fprintf(file, ", ");
+        }
+    }
+    fprintf(file, "]\n");
+}
+
+// 辅助函数：将所有路径信息写入文件
+void writeAllPathsToFile(FILE* file, PathList* paths) {
+    fprintf(file, "所有路径 (共 %d 条):\n", paths->count);
+    for (int i = 0; i < paths->count; i++) {
+        fprintf(file, "%d. ", i + 1);
+        writePathToFile(file, paths->paths[i]);
+    }
+}
 
 // 打印测试结果的辅助函数
 void printDistances(int* distances, int vertices, const char* label) {
@@ -15,29 +133,15 @@ void printDistances(int* distances, int vertices, const char* label) {
 }
 
 // 测试函数
-void testBasicDAGAlgorithms() {
+void testBasicDAGAlgorithms(Graph* graph) {
     printf("==== 基本DAG算法测试 ====\n");
     
-    // 创建一个简单的DAG
-    // 0 -> 1 -> 3
-    // |    |
-    // v    v
-    // 2 -> 4
-    int vertices = 5;
-    Graph* g = createGraph(vertices);
+    int vertices = graph->vertices;
     
-    // 添加边和权重
-    addEdge(g, 0, 1, 2);  // 0->1, 权重2
-    addEdge(g, 0, 2, 3);  // 0->2, 权重3
-    addEdge(g, 1, 3, 5);  // 1->3, 权重5
-    addEdge(g, 1, 4, 1);  // 1->4, 权重1
-    addEdge(g, 2, 4, 6);  // 2->4, 权重6
-    
-    printf("图已创建，具有 %d 个顶点和以下边：\n", vertices);
-    printf("0->1 (2), 0->2 (3), 1->3 (5), 1->4 (1), 2->4 (6)\n\n");
+    printf("图已创建，具有 %d 个顶点\n", vertices);
     
     // 拓扑排序
-    int* topoOrder = topologicalSort(g);
+    int* topoOrder = topologicalSort(graph);
     if (topoOrder) {
         printf("拓扑排序结果: ");
         for (int i = 0; i < vertices; i++) {
@@ -51,7 +155,7 @@ void testBasicDAGAlgorithms() {
     
     // 最短路径
     int source = 0;
-    int* shortestDistances = dagShortestPath(g, source);
+    int* shortestDistances = dagShortestPath(graph, source);
     
     if (shortestDistances) {
         printDistances(shortestDistances, vertices, "从顶点0开始的最短路径距离");
@@ -59,73 +163,120 @@ void testBasicDAGAlgorithms() {
     }
     
     // 最长路径
-    int* longestDistances = dagLongestPath(g, source);
+    int* longestDistances = dagLongestPath(graph, source);
     
     if (longestDistances) {
         printDistances(longestDistances, vertices, "从顶点0开始的最长路径距离");
         free(longestDistances);
     }
-    
-    // 清理图
-    freeGraph(g);
 }
 
-void testAllPaths() {
+void testBasicDAGAlgorithmsToFile(FILE* file, Graph* graph) {
+    fprintf(file, "==== 基本DAG算法测试 ====\n");
+    
+    int vertices = graph->vertices;
+    
+    fprintf(file, "图已创建，具有 %d 个顶点\n", vertices);
+    
+    // 拓扑排序
+    int* topoOrder = topologicalSort(graph);
+    if (topoOrder) {
+        fprintf(file, "拓扑排序结果: ");
+        for (int i = 0; i < vertices; i++) {
+            fprintf(file, "%d ", topoOrder[i]);
+        }
+        fprintf(file, "\n");
+        free(topoOrder);
+    } else {
+        fprintf(file, "图中存在环，不是DAG\n");
+    }
+    
+    // 最短路径
+    int source = 0;
+    int* shortestDistances = dagShortestPath(graph, source);
+    
+    if (shortestDistances) {
+        fprintf(file, "从顶点0开始的最短路径距离:\n");
+        for (int i = 0; i < vertices; i++) {
+            if (shortestDistances[i] == INT_MAX) {
+                fprintf(file, "顶点 %d: 不可达\n", i);
+            } else {
+                fprintf(file, "顶点 %d: %d\n", i, shortestDistances[i]);
+            }
+        }
+        free(shortestDistances);
+    }
+    
+    // 最长路径
+    int* longestDistances = dagLongestPath(graph, source);
+    
+    if (longestDistances) {
+        fprintf(file, "从顶点0开始的最长路径距离:\n");
+        for (int i = 0; i < vertices; i++) {
+            if (longestDistances[i] == INT_MIN) {
+                fprintf(file, "顶点 %d: 不可达\n", i);
+            } else {
+                fprintf(file, "顶点 %d: %d\n", i, longestDistances[i]);
+            }
+        }
+        free(longestDistances);
+    }
+}
+
+void testAllPaths(Graph* graph) {
     printf("\n==== 所有路径枚举测试 ====\n");
     
-    // 创建一个简单的DAG
-    int vertices = 5;
-    Graph* g = createGraph(vertices);
+    int vertices = graph->vertices;
     
-    // 添加边
-    addEdge(g, 0, 1, 1);
-    addEdge(g, 0, 2, 1);
-    addEdge(g, 1, 3, 1);
-    addEdge(g, 1, 4, 1);
-    addEdge(g, 2, 3, 1);
-    addEdge(g, 2, 4, 1);
-    
-    printf("图已创建，具有多条从顶点0到顶点4的路径\n");
+    printf("图已创建，具有 %d 个顶点\n", vertices);
     
     // 枚举所有路径
     int source = 0;
-    int target = 4;
+    int target = vertices - 1;
     
-    PathList* paths = allPaths(g, source, target);
+    PathList* paths = allPaths(graph, source, target);
     
     printf("从顶点 %d 到顶点 %d 的所有路径：\n", source, target);
     printAllPaths(paths);
     
     // 清理
     freePathList(paths);
-    freeGraph(g);
 }
 
-void testResourceConstrainedPath() {
+void testAllPathsToFile(FILE* file, Graph* graph) {
+    fprintf(file, "\n==== 所有路径枚举测试 ====\n");
+    
+    int vertices = graph->vertices;
+    
+    fprintf(file, "图已创建，具有 %d 个顶点\n", vertices);
+    
+    // 枚举所有路径
+    int source = 0;
+    int target = vertices - 1;
+    
+    PathList* paths = allPaths(graph, source, target);
+    
+    fprintf(file, "从顶点 %d 到顶点 %d 的所有路径：\n", source, target);
+    writeAllPathsToFile(file, paths);
+    
+    // 清理
+    freePathList(paths);
+}
+
+void testResourceConstrainedPath(Graph* graph) {
     printf("\n==== 资源受限路径规划测试 ====\n");
     
-    // 创建一个DAG，边有权重和资源消耗
-    int vertices = 5;
-    Graph* g = createGraph(vertices);
+    int vertices = graph->vertices;
     
-    // 添加边：(源，目标，权重，资源消耗)
-    addResourceEdge(g, 0, 1, 2, 3);  // 0->1: 权重2，资源3
-    addResourceEdge(g, 0, 2, 1, 5);  // 0->2: 权重1，资源5
-    addResourceEdge(g, 1, 3, 3, 2);  // 1->3: 权重3，资源2
-    addResourceEdge(g, 1, 4, 5, 1);  // 1->4: 权重5，资源1
-    addResourceEdge(g, 2, 3, 2, 1);  // 2->3: 权重2，资源1
-    addResourceEdge(g, 2, 4, 4, 3);  // 2->4: 权重4，资源3
-    addResourceEdge(g, 3, 4, 1, 2);  // 3->4: 权重1，资源2
-    
-    printf("图已创建，边具有权重和资源消耗\n");
+    printf("图已创建，具有 %d 个顶点\n", vertices);
     
     int source = 0;
-    int target = 4;
-    int resourceLimit = 7;
+    int target = vertices - 1;
+    int resourceLimit = 10;
     
     printf("源顶点: %d, 目标顶点: %d, 资源限制: %d\n", source, target, resourceLimit);
     
-    ResourceConstrainedResult* result = resourceConstrainedShortestPath(g, source, target, resourceLimit);
+    ResourceConstrainedResult* result = resourceConstrainedShortestPath(graph, source, target, resourceLimit);
     
     if (result) {
         if (result->path) {
@@ -138,37 +289,47 @@ void testResourceConstrainedPath() {
         }
         free(result);
     }
-    
-    // 清理
-    freeGraph(g);
 }
 
-void testIncrementalTableMethod() {
-    printf("\n==== 增量式表格构建最短路径测试 ====\n");
+void testResourceConstrainedPathToFile(FILE* file, Graph* graph) {
+    fprintf(file, "\n==== 资源受限路径规划测试 ====\n");
     
-    // 创建一个大一点的DAG
-    int vertices = 8;
-    Graph* g = createGraph(vertices);
+    int vertices = graph->vertices;
     
-    // 添加边
-    addEdge(g, 0, 1, 3);
-    addEdge(g, 0, 2, 1);
-    addEdge(g, 1, 3, 2);
-    addEdge(g, 1, 4, 4);
-    addEdge(g, 2, 3, 5);
-    addEdge(g, 2, 5, 2);
-    addEdge(g, 3, 4, 1);
-    addEdge(g, 3, 6, 7);
-    addEdge(g, 4, 7, 3);
-    addEdge(g, 5, 6, 4);
-    addEdge(g, 6, 7, 1);
-    
-    printf("创建了一个较大的DAG，测试增量式表格构建方法\n");
+    fprintf(file, "图已创建，具有 %d 个顶点\n", vertices);
     
     int source = 0;
-    int target = 7;
+    int target = vertices - 1;
+    int resourceLimit = 10;
     
-    ShortestPathResult* result = incrementalTableDagShortestPath(g, source, target);
+    fprintf(file, "源顶点: %d, 目标顶点: %d, 资源限制: %d\n", source, target, resourceLimit);
+    
+    ResourceConstrainedResult* result = resourceConstrainedShortestPath(graph, source, target, resourceLimit);
+    
+    if (result) {
+        if (result->path) {
+            fprintf(file, "找到满足资源限制的最短路径，总距离: %d\n", result->distance);
+            writePathToFile(file, result->path);
+            freePath(result->path);
+        } else {
+            fprintf(file, "在资源限制 %d 下，没有找到从顶点 %d 到顶点 %d 的路径\n", 
+                   resourceLimit, source, target);
+        }
+        free(result);
+    }
+}
+
+void testIncrementalTableMethod(Graph* graph) {
+    printf("\n==== 增量式表格构建最短路径测试 ====\n");
+    
+    int vertices = graph->vertices;
+    
+    printf("图已创建，具有 %d 个顶点\n", vertices);
+    
+    int source = 0;
+    int target = vertices - 1;
+    
+    ShortestPathResult* result = incrementalTableDagShortestPath(graph, source, target);
     
     if (result) {
         if (result->path) {
@@ -180,21 +341,97 @@ void testIncrementalTableMethod() {
         }
         free(result);
     }
-    
-    // 清理
-    freeGraph(g);
 }
 
-int main() {
-    printf("DAG路径规划算法演示\n");
-    printf("====================\n\n");
+void testIncrementalTableMethodToFile(FILE* file, Graph* graph) {
+    fprintf(file, "\n==== 增量式表格构建最短路径测试 ====\n");
     
-    testBasicDAGAlgorithms();
-    testAllPaths();
-    testResourceConstrainedPath();
-    testIncrementalTableMethod();
+    int vertices = graph->vertices;
     
-    printf("\n所有测试完成!\n");
+    fprintf(file, "图已创建，具有 %d 个顶点\n", vertices);
     
+    int source = 0;
+    int target = vertices - 1;
+    
+    ShortestPathResult* result = incrementalTableDagShortestPath(graph, source, target);
+    
+    if (result) {
+        if (result->path) {
+            fprintf(file, "从顶点 %d 到顶点 %d 的最短路径距离: %d\n", source, target, result->distance);
+            writePathToFile(file, result->path);
+            freePath(result->path);
+        } else {
+            fprintf(file, "无法到达顶点 %d\n", target);
+        }
+        free(result);
+    }
+}
+
+int main(int argc, char* argv[]) {
+    if (argc != 3) {
+        fprintf(stderr, "用法: %s <query_file> <output_file>\n", argv[0]);
+        return 1;
+    }
+
+    const char* queryFile = argv[1];
+    const char* outputFile = argv[2];
+
+    // 读取query文件
+    FILE* queryF = fopen(queryFile, "r");
+    if (!queryF) {
+        fprintf(stderr, "无法打开query文件: %s\n", queryFile);
+        return 1;
+    }
+    char* query = NULL;
+    size_t queryLen = 0;
+    fseek(queryF, 0, SEEK_END);
+    long fsize = ftell(queryF);
+    fseek(queryF, 0, SEEK_SET);
+
+    query = (char*)malloc(fsize + 1);
+    fread(query, fsize, 1, queryF);
+    query[fsize] = '\0';
+    fclose(queryF);
+
+    // 读取reference文件
+    FILE* referenceF = fopen("/home/xy/lab1/reference.txt", "r");
+    if (!referenceF) {
+        fprintf(stderr, "无法打开reference文件: /home/xy/lab1/reference.txt\n");
+        free(query);
+        return 1;
+    }
+    char* reference = NULL;
+    size_t referenceLen = 0;
+    fseek(referenceF, 0, SEEK_END);
+    long refsize = ftell(referenceF);
+    fseek(referenceF, 0, SEEK_SET);
+
+    reference = (char*)malloc(refsize + 1);
+    fread(reference, refsize, 1, referenceF);
+    reference[refsize] = '\0';
+    fclose(referenceF);
+
+    // 打开输出文件
+    FILE* outputF = fopen(outputFile, "w");
+    if (!outputF) {
+        fprintf(stderr, "无法打开输出文件: %s\n", outputFile);
+        free(query);
+        free(reference);
+        return 1;
+    }
+
+    // 写入表头
+    fprintf(outputF, "位置,长度,重复次数,是否反向重复,原始序列,重复实例\n");
+
+    // 查找并写入重复序列
+    findRepeats(query, reference, outputF);
+
+    // 清理
+    free(query);
+    free(reference);
+    fclose(outputF);
+
+    printf("结果已写入文件: %s\n", outputFile);
+
     return 0;
 }

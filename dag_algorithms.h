@@ -32,10 +32,24 @@ typedef struct {
     int capacity;
 } PathList;
 
+// 堆节点定义
+typedef struct {
+    int vertex;
+    int distance;
+} HeapNode;
+
+// 最小堆数据结构
+typedef struct {
+    HeapNode* array;
+    int size;
+    int capacity;
+    int* positions;  // 存储顶点在堆中的位置
+} MinHeap;
+
 // 最短路径结果结构
 typedef struct {
     int distance;
-    Path* path;  // Changed from int* to Path*
+    Path* path;
 } ShortestPathResult;
 
 // 资源受限最短路径结果结构
@@ -64,6 +78,17 @@ void addToPathList(PathList* list, Path* path);
 void freePathList(PathList* list);
 void printAllPaths(PathList* list);
 
+// 最小堆操作
+MinHeap* createMinHeap(int capacity, int vertices);
+void swapHeapNodes(HeapNode* a, HeapNode* b);
+void minHeapify(MinHeap* heap, int index);
+bool isEmpty(MinHeap* heap);
+HeapNode extractMin(MinHeap* heap);
+void decreaseKey(MinHeap* heap, int vertex, int distance);
+bool isInHeap(MinHeap* heap, int vertex);
+void insert(MinHeap* heap, int vertex, int distance);
+void freeMinHeap(MinHeap* heap);
+
 // 拓扑排序
 int* topologicalSort(Graph* graph);
 
@@ -76,6 +101,7 @@ int* dagLongestPath(Graph* graph, int source);
 
 // 所有路径枚举
 PathList* allPaths(Graph* graph, int source, int target);
+void dfsAllPaths(Graph* graph, int u, int target, Path* currentPath, PathList* pathList);
 
 // 资源受限最短路径
 ResourceConstrainedResult* resourceConstrainedShortestPath(Graph* graph, int source, int target, int resourceLimit);
