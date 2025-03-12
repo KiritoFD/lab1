@@ -1,10 +1,13 @@
 CC = gcc
-CFLAGS = -Wall -Wextra -O2
+CFLAGS = -Wall -Wextra -g
 
-all: dna_repeat_finder
+all: dag_demo
 
-dna_repeat_finder: dna_repeat_finder.c
-	$(CC) $(CFLAGS) -o dna_repeat_finder dna_repeat_finder.c
+dag_demo: main.c dag_algorithms.c dag_algorithms.h
+	$(CC) $(CFLAGS) -o dag_demo main.c dag_algorithms.c
 
 clean:
-	rm -f dna_repeat_finder
+	rm -f dag_demo
+	rm -f *.o
+
+.PHONY: all clean
