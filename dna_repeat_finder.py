@@ -85,8 +85,6 @@ def find_repeats(query, reference, min_length=10):
         
         # 检查reference中的每个片段
         for i in range(ref_len - length + 1):
-            if i % 1000 == 0:
-                print(f"处理进度: {i}/{ref_len} ({i/ref_len*100:.1f}%)")
             
             segment = reference[i:i+length]
             positions = window_positions.get(segment, [])
