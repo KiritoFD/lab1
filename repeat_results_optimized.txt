@@ -1,0 +1,2 @@
+参考位置,长度,重复次数,是否反向重复,原始序列,查询位置
+400,70,3,否,TAGACCAACACTAATCGAGACTGCCTCGTT...,600

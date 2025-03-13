@@ -1,158 +1,155 @@
 #!/usr/bin/env python3
 # DNA Repeat Finder
 # 用于查找DNA序列中的重复片段
-max_length = 120  # 最大重复片段长度，增加上限以确保能捕获100bp的重复
+max_length = 120
 
 def read_sequence(filename):
     """读取文件中的DNA序列"""
     with open(filename, 'r') as f:
-        return f.read().strip().upper()  # 转换为大写以统一处理
+        return f.read().strip().upper()
 
 def get_reverse_complement(dna):
     """获取DNA序列的反向互补序列"""
     complement = {'A': 'T', 'T': 'A', 'G': 'C', 'C': 'G'}
     return ''.join(complement.get(base, 'N') for base in reversed(dna))
 
-def find_repeats(query, reference, min_length=10):
-    """
-    查找满足Lab1要求的重复片段:
-    - 在reference中只出现一次但在query中连续重复出现的序列
-    - 在reference中出现的序列在query中出现其反向互补序列
+def build_lps(pattern):
+    """构建 KMP 算法的最长相同前后缀数组"""
+    length = len(pattern)
+    lps = [0] * length
+    len_prev = 0
+    i = 1
+
+    while i < length:
+        if pattern[i] == pattern[len_prev]:
+            len_prev += 1
+            lps[i] = len_prev
+            i += 1
+        else:
+            if len_prev != 0:
+                len_prev = lps[len_prev - 1]
+            else:
+                lps[i] = 0
+                i += 1
+    return lps
+
+def kmp_search(text, pattern):
+    """使用 KMP 算法进行字符串匹配，返回所有匹配位置"""
+    if not pattern or not text:
+        return []
+
+    matches = []
+    n, m = len(text), len(pattern)
+    lps = build_lps(pattern)
     
-    参数:
-        query: 查询DNA序列
-        reference: 参考DNA序列
-        min_length: 最小重复片段长度
-        
-    返回:
-        重复片段列表，每个重复包含位置、长度、重复次数等信息
-    """
+    i = j = 0
+    while i < n:
+        if pattern[j] == text[i]:
+            i += 1
+            j += 1
+        if j == m:
+            matches.append(i - j)
+            j = lps[j - 1]
+        elif i < n and pattern[j] != text[i]:
+            if j != 0:
+                j = lps[j - 1]
+            else:
+                i += 1
+    return matches
+
+def count_occurrences(reference, segment):
+    """计算片段在参考序列中的出现次数"""
+    return len(kmp_search(reference, segment))
+
+def find_repeats(query, reference, min_length=10):
+    """查找重复片段，优化版本"""
     repeats = []
     ref_len = len(reference)
     query_len = len(query)
     
-    # 使用更小的步长以确保不会错过任何重复，特别是在400位置附近
-    step = 1  # 使用步长1确保不会遗漏任何重复
+    print(f"搜索参数: min_length={min_length}, max_length={max_length}")
     
-    print(f"搜索参数: min_length={min_length}, max_length={max_length}, step={step}")
+    # 使用滑动窗口和字典来跟踪片段位置
+    window_positions = {}
     
-    # 特别检查位置400附近
-    special_check_around = 400
-    special_range = range(special_check_around-10, special_check_around+10)
-    
-    # 在reference中搜索可能的重复元素
-    for pos in range(ref_len - min_length):
-        # 进度报告
-        if pos % 1000 == 0:
-            print(f"处理进度: {pos}/{ref_len} ({pos/ref_len*100:.1f}%)")
-            
-        # 对400位置附近使用更精细的步长
-        actual_step = 1 if pos in special_range else step
+    # 预处理query序列，记录所有可能片段的位置
+    for length in range(min_length, min(max_length + 1, query_len - min_length + 1)):
+        window_positions.clear()  # 清空字典以节省内存
         
-        # 对长度循环进行优化，确保不会错过任何重要的长度
-        for length in range(min_length, min(max_length, ref_len - pos), actual_step):
-            # 如果是位置400附近，特别处理长度为100左右的片段
-            if pos in special_range and abs(length - 100) > 5:
-                if length > 105:  # 超过100大太多就跳过
-                    continue
+        # 为每个长度构建一次窗口位置映射
+        for i in range(query_len - length + 1):
+            segment = query[i:i+length]
+            if segment not in window_positions:
+                window_positions[segment] = []
+            window_positions[segment].append(i)
+        
+        # 检查reference中的每个片段
+        for i in range(ref_len - length + 1):
+            if i % 1000 == 0:
+                print(f"处理进度: {i}/{ref_len} ({i/ref_len*100:.1f}%)")
             
-            # 从reference中提取片段
-            segment = reference[pos:pos+length]
+            segment = reference[i:i+length]
+            positions = window_positions.get(segment, [])
             
             # 检查正向重复
-            repeat_info = check_consecutive_repeats(segment, query, pos, False, reference)
-            if repeat_info and repeat_info['count'] > 1:  # 确保至少重复两次
-                repeats.append({
-                    'position': pos,
-                    'length': length,
-                    'repeat_count': repeat_info['count'],
-                    'is_reverse': False,
-                    'original_sequence': segment,
-                    'query_position': repeat_info['position']
-                })
+            if len(positions) >= 2:
+                consecutive_positions = []
+                current_group = [positions[0]]
+                
+                for j in range(1, len(positions)):
+                    if positions[j] == current_group[-1] + length:
+                        current_group.append(positions[j])
+                    else:
+                        if len(current_group) >= 2:
+                            consecutive_positions.append(current_group[:])
+                        current_group = [positions[j]]
+                
+                if len(current_group) >= 2:
+                    consecutive_positions.append(current_group)
+                
+                for group in consecutive_positions:
+                    repeats.append({
+                        'position': i,
+                        'length': length,
+                        'repeat_count': len(group),
+                        'is_reverse': False,
+                        'original_sequence': segment,
+                        'query_position': group[0]
+                    })
             
             # 检查反向互补重复
             rev_comp = get_reverse_complement(segment)
+            rev_positions = window_positions.get(rev_comp, [])
             
-            # 优化反向互补检测
-            repeat_info = check_consecutive_repeats(rev_comp, query, pos, True, reference)
-            if repeat_info and repeat_info['count'] > 1:  # 确保至少重复两次
-                repeats.append({
-                    'position': pos,
-                    'length': length,
-                    'repeat_count': repeat_info['count'], 
-                    'is_reverse': True,
-                    'original_sequence': segment,
-                    'query_position': repeat_info['position']
-                })
-
-    # 过滤掉嵌套重复
-    filtered_repeats = filter_nested_repeats(repeats)
+            if len(rev_positions) >= 2:
+                consecutive_positions = []
+                current_group = [rev_positions[0]]
+                
+                for j in range(1, len(rev_positions)):
+                    if rev_positions[j] == current_group[-1] + length:
+                        current_group.append(rev_positions[j])
+                    else:
+                        if len(current_group) >= 2:
+                            consecutive_positions.append(current_group[:])
+                        current_group = [rev_positions[j]]
+                
+                if len(current_group) >= 2:
+                    consecutive_positions.append(current_group)
+                
+                for group in consecutive_positions:
+                    repeats.append({
+                        'position': i,
+                        'length': length,
+                        'repeat_count': len(group),
+                        'is_reverse': True,
+                        'original_sequence': segment,
+                        'query_position': group[0]
+                    })
     
-    # 按重复长度和次数排序
+    # 过滤嵌套重复并排序
+    filtered_repeats = filter_nested_repeats(repeats)
     filtered_repeats.sort(key=lambda x: (x['length'] * x['repeat_count']), reverse=True)
     return filtered_repeats
-
-def check_consecutive_repeats(segment, query, ref_pos, is_reverse, reference):
-    """
-    检查片段在query中是否有连续重复
-    
-    参数:
-        segment: 要搜索的序列片段
-        query: 查询序列
-        ref_pos: 该片段在reference中的位置
-        is_reverse: 是否为反向互补检查
-        reference: 参考序列，用于检查片段唯一性
-    
-    返回:
-        包含重复信息的字典或None
-    """
-    query_len = len(query)
-    seg_len = len(segment)
-    
-    # 在query中查找第一个匹配位置
-    start_idx = 0
-    while True:
-        idx = query.find(segment, start_idx)
-        if idx == -1:
-            return None
-            
-        next_idx = idx + seg_len
-        
-        # 检查是否有连续的重复
-        count = 1  # 已找到第一个匹配
-        current_pos = next_idx
-        
-        while current_pos + seg_len <= query_len:
-            if query[current_pos:current_pos+seg_len] == segment:
-                count += 1
-                current_pos += seg_len
-            else:
-                break
-        
-        # Lab1要求: 检查reference中是否只出现一次
-        if count > 1:
-            # 对于反向互补重复，需要检查原序列和互补序列在reference中的出现次数
-            if is_reverse:
-                orig_seq = get_reverse_complement(segment)  # 获取原始序列
-                if reference.count(orig_seq) <= 1:  # 在reference中出现不超过一次
-                    return {
-                        'position': idx,
-                        'count': count
-                    }
-            else:
-                # 如果在reference中找到该序列出现超过一次，跳过当前找到的
-                if reference.count(segment) <= 1:  # 修改为<=1，确保包括只出现一次的情况
-                    return {
-                        'position': idx,
-                        'count': count
-                    }
-        
-        # 如果当前位置没有连续重复，继续查找下一个位置
-        start_idx = idx + 1
-        
-        if start_idx >= query_len:
-            return None
 
 def filter_nested_repeats(repeats):
     """
