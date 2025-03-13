@@ -25,18 +25,18 @@ TOPOLOGICAL-SORT(G)
     L ← 空列表，用于存储已排序的元素
     S ← 所有无入边的节点集合
     
-    while S 非空 do
+    while S ≠ ∅ do
         从S中移除一个节点n
-        将n添加到L的末尾
-        for 对于每个存在边e从n指向m的节点m do
-            从图中移除边e
-            if m没有其他入边 then
-                将m插入S
+        L ← L ∪ {n}
+        for 每个邻接点 m ∈ Adj[n] do
+            从图中移除边 (n,m)
+            if m的入度 = 0 then
+                S ← S ∪ {m}
     
-    if 图中还存在边 then
-        返回错误（图中至少存在一个环）
+    if G中仍存在边 then
+        return error // 图中存在环
     else
-        返回L
+        return L
 ```
 
 **时间复杂度**：O(|V| + |E|)，其中|V|是顶点数，|E|是边数。

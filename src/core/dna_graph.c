@@ -130,20 +130,6 @@ void add_edge(GraphNode* source, GraphNode* target, int match_length, int is_rev
     source->num_edges++;
 }
 
-// Find repeats by traversing paths in the DNA graph
-RepeatPattern* find_repeats_in_graph(DNAGraph* graph, const char* reference, const char* query, int* num_repeats) {
-    if (!graph || !reference || !query || !num_repeats) {
-        if (num_repeats) *num_repeats = 0;
-        return NULL;
-    }
-    
-    printf("Finding repeats using graph traversal...\n");
-    
-    // Just return a placeholder for now until fully implemented
-    *num_repeats = 0;
-    return NULL;
-}
-
 // Free memory used by the DNA graph
 void free_dna_graph(DNAGraph* graph) {
     if (!graph) return;
@@ -158,4 +144,84 @@ void free_dna_graph(DNAGraph* graph) {
     }
     
     free(graph);
+}
+
+// Find repeats by traversing paths in the DNA graph
+RepeatPattern* find_repeats_in_graph(DNAGraph* graph, const char* reference, const char* query, int* num_repeats) {
+    if (!graph || !reference || !query || !num_repeats) {
+        if (num_repeats) *num_repeats = 0;
+        return NULL;
+    }
+    
+    printf("Finding repeats using graph traversal (length 50-100)...\n");
+    
+    // Allocate space for repeat patterns
+    int max_repeats = 100;
+    RepeatPattern* repeats = (RepeatPattern*)malloc(max_repeats * sizeof(RepeatPattern));
+    if (!repeats) {
+        *num_repeats = 0;
+        return NULL;
+    }
+    
+    int repeat_count = 0;
+    int min_repeat_length = 50;  // 修改为最小长度50
+    int max_repeat_length = 100; // 最大长度100
+    
+    // Iterate through all graph nodes to find potential repeats
+    for (int i = 0; i < graph->num_nodes && repeat_count < max_repeats; i++) {
+        GraphNode* current_node = &graph->nodes[i];
+        
+        // Skip nodes with no edges
+        if (current_node->num_edges == 0) continue;
+        
+        for (int j = 0; j < current_node->num_edges && repeat_count < max_repeats; j++) {
+            GraphEdge* edge = &current_node->edges[j];
+            int match_length = edge->match_length;
+            
+            // 尝试扩展匹配长度
+            if (match_length >= 5) { // 最小匹配长度为5，然后尝试扩展
+                int ref_pos = current_node->position;
+                int query_pos = edge->target->position;
+                int is_reverse = edge->is_reverse;
+                int extended_length = match_length;
+                
+                if (!is_reverse) {
+                    // 向前扩展匹配
+                    while (ref_pos + extended_length < strlen(reference) && 
+                           query_pos + extended_length < strlen(query) &&
+                           reference[ref_pos + extended_length] == query[query_pos + extended_length]) {
+                        extended_length++;
+                    }
+                } else {
+                    // 对于反向互补，我们需要不同的扩展逻辑
+                    // 这里简化处理，仅使用原始匹配长度
+                }
+                
+                // 如果扩展后的长度在50-100范围内，保存为重复序列
+                if (extended_length >= min_repeat_length && extended_length <= max_repeat_length) {
+                    // Store as repeat pattern
+                    repeats[repeat_count].position = ref_pos;
+                    repeats[repeat_count].length = extended_length;
+                    repeats[repeat_count].count = 1;
+                    repeats[repeat_count].is_reverse = is_reverse;
+                    repeats[repeat_count].orig_seq = NULL;
+                    repeats[repeat_count].repeat_examples = NULL;
+                    repeats[repeat_count].num_examples = 0;
+                    
+                    repeat_count++;
+                }
+            }
+        }
+    }
+    
+    // If no repeats found
+    if (repeat_count == 0) {
+        free(repeats);
+        *num_repeats = 0;
+        return NULL;
+    }
+    
+    // Set the return values
+    *num_repeats = repeat_count;
+    return repeats;
 }

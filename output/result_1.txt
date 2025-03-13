@@ -1,0 +1,15 @@
+Using default file paths:
+Reference file: reference.txt
+Query file: query.txt
+DNA Repeat Finder
+Version: 2.0 with DAG-based approach
+
+Using 16 threads for parallel processing
+Reading reference sequence from reference.txt...
+Reading query sequence from query.txt...
+Successfully loaded sequences. Reference length: 800, Query length: 1410
+
+--- Using DAG-based approach ---
+
+Graph-based approach found 0 unique repeat patterns
+Graph processing time: 396.78 milliseconds
