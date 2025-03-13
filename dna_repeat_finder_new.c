@@ -311,6 +311,15 @@ void filter_nested_repeats(RepeatPattern* repeats, int* count) {
     free(to_remove);
 }
 
+// 比较重复片段的函数
+int compare_repeats(const void* a, const void* b) {
+    RepeatPattern* repeatA = (RepeatPattern*)a;
+    RepeatPattern* repeatB = (RepeatPattern*)b;
+    int scoreA = repeatA->length * repeatA->repeat_count;
+    int scoreB = repeatB->length * repeatB->repeat_count;
+    return scoreB - scoreA; // 降序排列
+}
+
 // 查找重复片段主函数
 RepeatPattern* find_repeats(const char* query, const char* reference, int* repeat_count) {
     int query_len = strlen(query);
@@ -330,7 +339,7 @@ RepeatPattern* find_repeats(const char* query, const char* reference, int* repea
     
     // 按长度遍历
     for (int length = MIN_LENGTH; length <= MAX_LENGTH && length <= query_len; length++) {
-        printf("处理长度: %d\n", length);
+        //printf("处理长度: %d\n", length);
         clear_hashmap(window_positions);
         
         // 为当前长度构建查询序列的位置映射
@@ -407,17 +416,8 @@ RepeatPattern* find_repeats(const char* query, const char* reference, int* repea
     // 过滤嵌套重复并排序
     filter_nested_repeats(repeats, repeat_count);
     
-    // 排序重复片段（按长度和重复次数）
-    for (int i = 0; i < *repeat_count - 1; i++) {
-        for (int j = i + 1; j < *repeat_count; j++) {
-            if (repeats[j].length * repeats[j].repeat_count > 
-                repeats[i].length * repeats[i].repeat_count) {
-                RepeatPattern temp = repeats[i];
-                repeats[i] = repeats[j];
-                repeats[j] = temp;
-            }
-        }
-    }
+    // 使用快速排序优化重复片段排序（按长度和重复次数）
+    qsort(repeats, *repeat_count, sizeof(RepeatPattern), compare_repeats);
     
     free_hashmap(window_positions);
     return repeats;
@@ -453,7 +453,7 @@ void save_repeats_to_file(RepeatPattern* repeats, int count) {
     
     for (int i = 0; i < count; i++) {
         fprintf(file, "重复 #%d:\n", i+1);
-        fprintf(file, "  参考位置: %d\n", repeats[i].position);
+        fprintf(file, "  参考位置: %d\n", repeats[i].position+repeats[i].length);
         fprintf(file, "  长度: %d\n", repeats[i].length);
         fprintf(file, "  重复次数: %d\n", repeats[i].repeat_count);
         fprintf(file, "  是否反向重复: %s\n", repeats[i].is_reverse ? "是" : "否");
@@ -492,6 +492,12 @@ int main(int argc, char* argv[]) {
     
     printf("找到 %d 个重复片段，耗时: %.2f 秒\n", repeat_count, time_spent);
     
+    //打印结果
+    for (int i = 0; i < repeat_count; i++) {
+        printf("重复 #%d: 位置: %d, 长度: %d, 重复次数: %d, 是否反向: %s\n",
+               i+1, repeats[i].position+repeats[i].length, repeats[i].length, repeats[i].repeat_count,
+               repeats[i].is_reverse ? "是" : "否");
+    }
     // 保存结果
     save_repeats_to_file(repeats, repeat_count);
     
