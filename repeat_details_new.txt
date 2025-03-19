@@ -1,40 +1,40 @@
-重复 #1:
-  参考位置: 400
-  长度: 50
-  重复次数: 5
-  是否反向重复: 否
-  原始序列: CTGCCTCGTTAGTGCATCATTTTTGCGCCATAGACCATAGCTAAGCGAGC
-  查询位置: 350
+Repeat #1:
+  Reference Position: 400
+  Length: 50
+  Repeat Count: 5
+  Is Reverse Repeat: No
+  Original Sequence: CTGCCTCGTTAGTGCATCATTTTTGCGCCATAGACCATAGCTAAGCGAGC
+  Query Position: 350
 
-重复 #2:
-  参考位置: 400
-  长度: 70
-  重复次数: 3
-  是否反向重复: 否
-  原始序列: TAGACCAACACTAATCGAGACTGCCTCGTTAGTGCATCATTTTTGCGCCATAGACCATAGCTAAGCGAGC
-  查询位置: 330
+Repeat #2:
+  Reference Position: 400
+  Length: 70
+  Repeat Count: 3
+  Is Reverse Repeat: No
+  Original Sequence: TAGACCAACACTAATCGAGACTGCCTCGTTAGTGCATCATTTTTGCGCCATAGACCATAGCTAAGCGAGC
+  Query Position: 330
 
-重复 #3:
-  参考位置: 402
-  长度: 50
-  重复次数: 4
-  是否反向重复: 否
-  原始序列: GCCTCGTTAGTGCATCATTTTTGCGCCATAGACCATAGCTAAGCGAGCCT
-  查询位置: 352
+Repeat #3:
+  Reference Position: 402
+  Length: 50
+  Repeat Count: 4
+  Is Reverse Repeat: No
+  Original Sequence: GCCTCGTTAGTGCATCATTTTTGCGCCATAGACCATAGCTAAGCGAGCCT
+  Query Position: 352
 
-重复 #4:
-  参考位置: 401
-  长度: 50
-  重复次数: 4
-  是否反向重复: 否
-  原始序列: TGCCTCGTTAGTGCATCATTTTTGCGCCATAGACCATAGCTAAGCGAGCC
-  查询位置: 351
+Repeat #4:
+  Reference Position: 401
+  Length: 50
+  Repeat Count: 4
+  Is Reverse Repeat: No
+  Original Sequence: TGCCTCGTTAGTGCATCATTTTTGCGCCATAGACCATAGCTAAGCGAGCC
+  Query Position: 351
 
-重复 #5:
-  参考位置: 400
-  长度: 100
-  重复次数: 2
-  是否反向重复: 是
-  原始序列: CAGCAACGCTAGTGGATAATTTTGTTGCTATAGACCAACACTAATCGAGACTGCCTCGTTAGTGCATCATTTTTGCGCCATAGACCATAGCTAAGCGAGC
-  查询位置: 810
+Repeat #5:
+  Reference Position: 400
+  Length: 100
+  Repeat Count: 2
+  Is Reverse Repeat: Yes
+  Original Sequence: CAGCAACGCTAGTGGATAATTTTGTTGCTATAGACCAACACTAATCGAGACTGCCTCGTTAGTGCATCATTTTTGCGCCATAGACCATAGCTAAGCGAGC
+  Query Position: 810
 
