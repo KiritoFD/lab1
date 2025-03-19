@@ -1,5 +1,5 @@
 重复 #1:
-  参考位置: 500
+  参考位置: 400
   长度: 50
   重复次数: 5
   是否反向重复: 否
@@ -7,7 +7,7 @@
   查询位置: 350
 
 重复 #2:
-  参考位置: 540
+  参考位置: 400
   长度: 70
   重复次数: 3
   是否反向重复: 否
@@ -15,15 +15,15 @@
   查询位置: 330
 
 重复 #3:
-  参考位置: 600
-  长度: 100
-  重复次数: 2
-  是否反向重复: 是
-  原始序列: CAGCAACGCTAGTGGATAATTTTGTTGCTATAGACCAACACTAATCGAGACTGCCTCGTTAGTGCATCATTTTTGCGCCATAGACCATAGCTAAGCGAGC
-  查询位置: 810
+  参考位置: 402
+  长度: 50
+  重复次数: 4
+  是否反向重复: 否
+  原始序列: GCCTCGTTAGTGCATCATTTTTGCGCCATAGACCATAGCTAAGCGAGCCT
+  查询位置: 352
 
 重复 #4:
-  参考位置: 501
+  参考位置: 401
   长度: 50
   重复次数: 4
   是否反向重复: 否
@@ -31,10 +31,10 @@
   查询位置: 351
 
 重复 #5:
-  参考位置: 502
-  长度: 50
-  重复次数: 4
-  是否反向重复: 否
-  原始序列: GCCTCGTTAGTGCATCATTTTTGCGCCATAGACCATAGCTAAGCGAGCCT
-  查询位置: 352
+  参考位置: 400
+  长度: 100
+  重复次数: 2
+  是否反向重复: 是
+  原始序列: CAGCAACGCTAGTGGATAATTTTGTTGCTATAGACCAACACTAATCGAGACTGCCTCGTTAGTGCATCATTTTTGCGCCATAGACCATAGCTAAGCGAGC
+  查询位置: 810
 
