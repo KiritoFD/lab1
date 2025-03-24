@@ -1,5 +1,5 @@
 Repeat #1:
-  Reference Position: 400
+  Reference Position: 350
   Length: 50
   Repeat Count: 5
   Is Reverse Repeat: No
@@ -7,7 +7,7 @@ Repeat #1:
   Query Position: 350
 
 Repeat #2:
-  Reference Position: 400
+  Reference Position: 330
   Length: 70
   Repeat Count: 3
   Is Reverse Repeat: No
@@ -15,7 +15,7 @@ Repeat #2:
   Query Position: 330
 
 Repeat #3:
-  Reference Position: 401
+  Reference Position: 351
   Length: 50
   Repeat Count: 4
   Is Reverse Repeat: No
@@ -23,7 +23,7 @@ Repeat #3:
   Query Position: 351
 
 Repeat #4:
-  Reference Position: 402
+  Reference Position: 352
   Length: 50
   Repeat Count: 4
   Is Reverse Repeat: No
@@ -31,7 +31,7 @@ Repeat #4:
   Query Position: 352
 
 Repeat #5:
-  Reference Position: 400
+  Reference Position: 300
   Length: 100
   Repeat Count: 2
   Is Reverse Repeat: Yes

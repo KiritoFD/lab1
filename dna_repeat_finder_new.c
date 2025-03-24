@@ -137,20 +137,44 @@ float calculate_similarity(const char* seq1, const char* seq2, int length) {
     return (float)matches / length;
 }
 
-// 获取模糊哈希值
+// 获取模糊哈希值 - 使用滚动哈希提高效率
 unsigned int fuzzy_hash_function(const char* str, int length, int size) {
-    unsigned int hash = 5381;
-    // 使用滑动窗口计算局部特征
+    const unsigned int prime = 31; // 用于滚动哈希的素数
+    unsigned int hash = 0;
+    unsigned int power = 1; // prime^(window_size-1)
     int window_size = 3; // k-mer大小
     
-    for (int i = 0; i <= length - window_size; i++) {
-        unsigned int local_hash = 0;
-        for (int j = 0; j < window_size; j++) {
-            local_hash = ((local_hash << 5) + local_hash) + str[i + j];
+    if (length < window_size) {
+        // 如果字符串长度小于窗口大小，使用普通哈希
+        for (int i = 0; i < length; i++) {
+            hash = prime * hash + str[i];
         }
-        hash = ((hash << 5) + hash) + local_hash;
+        return hash % size;
     }
-    return hash % size;
+    
+    // 计算第一个窗口的哈希值
+    for (int i = 0; i < window_size; i++) {
+        hash = prime * hash + str[i];
+    }
+    
+    // 计算prime^(window_size-1)，用于之后移除最左边字符的贡献
+    for (int i = 0; i < window_size - 1; i++) {
+        power = (power * prime);
+    }
+    
+    unsigned int global_hash = hash;
+    
+    // 使用滚动哈希计算其余窗口的哈希值
+    for (int i = window_size; i < length; i++) {
+        // 移除最左边字符的贡献
+        hash = hash - power * str[i - window_size];
+        // 将哈希值乘以prime并添加新字符
+        hash = hash * prime + str[i];
+        // 将当前窗口的哈希值累加到全局哈希值
+        global_hash = global_hash ^ hash; // 使用异或操作合并哈希值
+    }
+    
+    return global_hash % size;
 }
 
 void hashmap_put(HashMap* map, const char* key, int position) {
