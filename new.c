@@ -4,12 +4,13 @@
 #include <stdbool.h>
 #include <time.h>
 #include <math.h>
+#include <omp.h>
 //编译命令：gcc -march=znver4 -mtune=znver4 -O3 -ffast-math -flto -fuse-linker-plugin     -fprefetch-loop-arrays -funroll-loops -fomit-frame-pointer -mavx2 -mfma     -pthread -fopenmp     -DCPU_RYZEN_7940HX -DNUM_CORES=16 -DNUM_THREADS=32     -DL1_CACHE_SIZE=32768 -DL2_CACHE_SIZE=512000 -DL3_CACHE_SIZE=32768000     dna_repeat_finder_new.c -o dna_repeat_finder_new
 
 //优化版编译命令：gcc -march=znver4 -mtune=znver4 -Ofast -flto -fuse-linker-plugin -fgraphite-identity -floop-nest-optimize -fprefetch-loop-arrays -funroll-loops -funroll-all-loops -fomit-frame-pointer -mavx2 -mfma  -pthread -fopenmp -fopt-info-vec-optimized -fmodulo-sched -fmodulo-sched-allow-regmoves -floop-interchange -floop-unroll-and-jam -ftree-loop-distribution -ftree-vectorize -funsafe-math-optimizations -ftracer -fweb -frename-registers -finline-functions -fipa-pta -falign-functions=64 -DCPU_RYZEN_7940HX -DNUM_CORES=16 -DNUM_THREADS=32 -DL1_CACHE_SIZE=32768 -DL2_CACHE_SIZE=512000 -DL3_CACHE_SIZE=32768000 dna_repeat_finder_new.c -o dna_repeat_finder_new
 
-#define MAX_LENGTH 101
-#define MIN_LENGTH 50
+#define MAX_LENGTH 120
+#define MIN_LENGTH 10
 #define MAX_REPEATS 1000
 
 // 重复片段的数据结构
@@ -36,6 +37,7 @@ typedef struct {
     HashNode** buckets;
     int size;
     float similarity_threshold; // 相似度阈值
+    omp_lock_t* locks;  // 添加每个桶的锁
 } HashMap;
 
 // 函数声明
@@ -53,7 +55,7 @@ void save_repeats_to_file(RepeatPattern* repeats, int count);
 int* find_consecutive_groups(int* positions, int pos_count, int length, int* group_count);
 void filter_nested_repeats(RepeatPattern* repeats, int* count);
 void quick_sort_repeats(RepeatPattern* repeats, int left, int right);
-HashMap* build_sequence_hashmap(const char* sequence, int seq_len, int length);
+int partition(RepeatPattern* repeats, int left, int right);
 
 // KMP算法实现
 int* build_next(const char* pattern, int length) {
@@ -113,6 +115,12 @@ HashMap* create_hashmap(int size) {
     map->size = size;
     map->buckets = (HashNode**)calloc(size, sizeof(HashNode*));
     map->similarity_threshold = 0.85f; // 默认相似度阈值
+    
+    // 初始化锁数组
+    map->locks = (omp_lock_t*)malloc(sizeof(omp_lock_t) * size);
+    for (int i = 0; i < size; i++) {
+        omp_init_lock(&map->locks[i]);
+    }
     return map;
 }
 
@@ -238,6 +246,7 @@ void free_hashmap(HashMap* map) {
 // 读取序列
 char* read_sequence(const char* filename) {
     FILE* file = fopen(filename, "r");
+    FILE* file = fopen("repeat_results_new.txt", "w");
     if (!file) {
         printf("无法打开文件: %s\n", filename);
         exit(1);
@@ -405,31 +414,28 @@ RepeatPattern* find_repeats(const char* query, const char* reference, int* repea
     RepeatPattern* repeats = (RepeatPattern*)malloc(sizeof(RepeatPattern) * MAX_REPEATS);
     *repeat_count = 0;
     
+    // 创建哈希表用于存储片段位置
+    HashMap* window_positions = create_hashmap(16384); // 使用较大的哈希表以减少冲突
+    
     // 特别关注区域
-    // 特别关注区域位置
-    int special_check_around = query_len/2; // 默认值
-    
-    // 从环境变量获取值 (如果存在)
-    char* env_value = getenv("SPECIAL_CHECK_AREA");
-    if (env_value != NULL) {
-        int parsed_value = atoi(env_value);
-        if (parsed_value > 0) {
-            special_check_around = parsed_value;
-        }
-    }
-    
-    printf("Special check area around position: %d\n", special_check_around);
+    int special_check_around = 400;
     
     // 按长度遍历
     for (int length = MIN_LENGTH; length <= MAX_LENGTH && length <= query_len; length++) {
+        clear_hashmap(window_positions);
+        
         // 为当前长度构建查询序列的位置映射
-        HashMap* window_positions = build_sequence_hashmap(query, query_len, length);
+        char* segment = (char*)malloc(length + 1);
+        for (int i = 0; i <= query_len - length; i++) {
+            strncpy(segment, query + i, length);
+            segment[length] = '\0';
+            hashmap_put(window_positions, segment, i);
+        }
         
         // 检查参考序列中的片段
-        char* segment = (char*)malloc(length + 1);
         char* rev_comp = (char*)malloc(length + 1);
-        
         for (int i = 0; i <= ref_len - length; i++) {
+            
             // 对于非特殊区域限制检查长度范围
             if (abs(i - special_check_around) > 10 && length > MIN_LENGTH + 10) {
                 if (length > 100) break;
@@ -476,24 +482,28 @@ RepeatPattern* find_repeats(const char* query, const char* reference, int* repea
                     repeats[*repeat_count].length = length;
                     repeats[*repeat_count].repeat_count = groups[g];
                     repeats[*repeat_count].is_reverse = true;
-                    repeats[*repeat_count].original_sequence = strdup(segment);
+                    repeats[*repeat_count].original_sequence = strdup(rev_comp);
                     repeats[*repeat_count].query_position = positions[g];
                     (*repeat_count)++;
                 }
                 
                 free(groups);
             }
+            
+            free(positions);
         }
         
         free(segment);
         free(rev_comp);
-        free_hashmap(window_positions);
     }
     
     // 过滤嵌套重复并排序
     filter_nested_repeats(repeats, repeat_count);
+    
+    // 使用快速排序替代冒泡排序
     quick_sort_repeats(repeats, 0, *repeat_count - 1);
     
+    free_hashmap(window_positions);
     return repeats;
 }
 
@@ -519,38 +529,22 @@ void save_repeats_to_file(RepeatPattern* repeats, int count) {
     fclose(file);
     
     // Save detailed information
-    file = fopen("repeat_details_new.txt", "w");
-    if (!file) {
+    FILE* details_file = fopen("repeat_details_new.txt", "w");
+    if (!details_file) {
         printf("Unable to create detailed output file\n");
         return;
     }
     
     for (int i = 0; i < count; i++) {
-        fprintf(file, "Repeat #%d:\n", i+1);
-        fprintf(file, "  Reference Position: %d\n", repeats[i].position);
-        fprintf(file, "  Length: %d\n", repeats[i].length);
-        fprintf(file, "  Repeat Count: %d\n", repeats[i].repeat_count);
-        fprintf(file, "  Is Reverse Repeat: %s\n", repeats[i].is_reverse ? "Yes" : "No");
-        fprintf(file, "  Original Sequence: %s\n", repeats[i].original_sequence);
-        fprintf(file, "  Query Position: %d\n\n", repeats[i].query_position);
+        fprintf(details_file, "Repeat #%d:\n", i+1);
+        fprintf(details_file, "  Reference Position: %d\n", repeats[i].position);
+        fprintf(details_file, "  Length: %d\n", repeats[i].length);
+        fprintf(details_file, "  Repeat Count: %d\n", repeats[i].repeat_count);
+        fprintf(details_file, "  Is Reverse Repeat: %s\n", repeats[i].is_reverse ? "Yes" : "No");
+        fprintf(details_file, "  Original Sequence: %s\n", repeats[i].original_sequence);
+        fprintf(details_file, "  Query Position: %d\n\n", repeats[i].query_position);
     }
-    fclose(file);
-}
-
-// 建立序列哈希表
-HashMap* build_sequence_hashmap(const char* sequence, int seq_len, int length) {
-    HashMap* window_positions = create_hashmap(16384); // 使用较大的哈希表以减少冲突
-    
-    // 构建查询序列的位置映射
-    char* segment = (char*)malloc(length + 1);
-    for (int i = 0; i <= seq_len - length; i++) {
-        strncpy(segment, sequence + i, length);
-        segment[length] = '\0';
-        hashmap_put(window_positions, segment, i);
-    }
-    free(segment);
-    
-    return window_positions;
+    fclose(details_file);
 }
 
 int main(int argc, char* argv[]) {

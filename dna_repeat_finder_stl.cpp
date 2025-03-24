@@ -24,10 +24,21 @@ g++ -std=c++20 -march=znver4 -mtune=znver4 -O3 -ffast-math -flto \
 #include <condition_variable>
 #include <queue>
 
-// AMD Ryzen 9 7940HX 特定参数
+// Add checks to prevent macro redefinition
+
+// Check if cache sizes are already defined via command line
+#ifndef L1_CACHE_SIZE
 constexpr int L1_CACHE_SIZE = 32 * 1024;  // 32KB per core
+#endif
+
+#ifndef L2_CACHE_SIZE
 constexpr int L2_CACHE_SIZE = 1024 * 1024;  // 1MB per core
+#endif
+
+#ifndef L3_CACHE_SIZE
 constexpr int L3_CACHE_SIZE = 32 * 1024 * 1024;  // 32MB shared
+#endif
+
 constexpr int CACHE_LINE_SIZE = 64;
 constexpr int NUM_PHYSICAL_CORES = 16;
 constexpr int NUM_LOGICAL_CORES = 32;
@@ -480,7 +491,7 @@ void save_repeats_to_file(const std::vector<RepeatPattern>& repeats,
 
 int main(int argc, char* argv[]) {
     try {
-        // 设置使用的线程数，选择合适的默认值
+        // 设置使用的线程数，选择合适的默认值，
         // 对于数据密集应用，过多的线程可能导致资源竞争
         int num_threads = std::max(1, NUM_LOGICAL_CORES / 4);  
         std::cout << "请输入线程数 (默认" << num_threads << "): ";
