@@ -1,0 +1,2 @@
+[console_scripts]
+sv_aligner = sv_aligner.main:main

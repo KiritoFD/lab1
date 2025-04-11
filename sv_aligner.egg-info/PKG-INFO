@@ -1,0 +1,11 @@
+Metadata-Version: 2.2
+Name: sv_aligner
+Version: 0.1.0
+Summary: SV-Aware Sequence Aligner
+Author: 
+Author-email: 
+Requires-Python: >=3.6
+Requires-Dist: pytest
+Dynamic: requires-dist
+Dynamic: requires-python
+Dynamic: summary

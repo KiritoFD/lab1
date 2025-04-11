@@ -1,0 +1,12 @@
+## LARGE DELETION DETECTION RESULTS ##
+Total detected: 1 large deletions (minimum size: 50bp)
+
+[1] DELETION DETECTED:
+  Query sequence: query1
+  Query position: 100-100 (gap: 0bp)
+  Reference sequence: ref1
+  Reference position: 100-200 (strand: +)
+  Deletion size: 100bp
+  Left segment: q:0-100 → r:0-100
+  Right segment: q:100-300 → r:200-400
+
